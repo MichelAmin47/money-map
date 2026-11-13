@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" fill="#E9EDE4"/>
+  <g transform="rotate(-9 32 32)">
+    <rect x="13" y="13" width="38" height="38" fill="none" stroke="#8C2F39" stroke-width="3.5"/>
+    <text x="32" y="45" text-anchor="middle" font-family="'Instrument Serif', Georgia, serif" font-size="38" fill="#8C2F39">V</text>
+  </g>
+</svg>
