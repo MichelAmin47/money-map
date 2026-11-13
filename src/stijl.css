@@ -549,12 +549,6 @@ select.hb-veld {
 .hb-veld-bedrag {
   font-family: var(--mono);
 }
-.hb-veld-code {
-  font-family: var(--mono);
-  font-size: 24px;
-  letter-spacing: 0.3em;
-  text-align: center;
-}
 .hb-datum {
   width: 160px;
   flex-shrink: 0;

@@ -2,7 +2,8 @@
 
 Persoonlijke budget-app (PWA) voor op de telefoon: salaris over drie potten, een
 weekpot die doorschuift, vaste lasten met een V-stempel, en termijnen die
-vanzelf meelopen. De volledige opdracht staat in [BRIEF.md](BRIEF.md).
+vanzelf meelopen. De volledige opdracht staat in [BRIEF.md](BRIEF.md); alleen
+het inloggen wijkt daarvan af (e-mail en wachtwoord in plaats van een code).
 
 - **Stack:** Vite + React + TypeScript, Supabase (Postgres + Auth), GitHub Pages.
 - **Geen persoonlijke data in de repo.** Salaris, vaste lasten en bedragen
@@ -21,18 +22,23 @@ ongemoeid.
    [`supabase/migrations/20261113120000_hb_huishoudboek.sql`](supabase/migrations/20261113120000_hb_huishoudboek.sql)
    en voer hem uit. (Of met de CLI: `supabase link` en daarna `supabase db push`.)
    De migratie draait in één transactie: gaat er iets mis, dan verandert er niets.
-2. **Code in de inlogmail.** Ga naar *Authentication → Emails → Magic Link* en
-   zorg dat de tekst `{{ .Token }}` bevat, bijvoorbeeld:
-   `Je inlogcode is {{ .Token }}`. Zonder die regel stuurt Supabase alleen een
-   link, en die werkt niet in de app op het iOS-beginscherm. Dit sjabloon wordt
-   gedeeld met de andere app in het project; de link mag er gewoon in blijven
-   staan.
-3. **Lengte van de code.** Controleer bij *Authentication → Sign In / Providers
-   → Email* dat *Email OTP Length* op 6 staat.
+2. **Account met wachtwoord.** Inloggen gaat met e-mailadres en wachtwoord
+   (`signInWithPassword`). De app heeft bewust geen registratie en geen
+   "wachtwoord vergeten". Zet het wachtwoord in het dashboard:
+   *Authentication → Users* → je gebruiker → *Reset password* of *Update
+   user*. Bestaat de gebruiker nog niet, maak hem daar dan aan met *Add user →
+   Create new user* (vink *Auto Confirm User* aan). Dit is hetzelfde account
+   als in de andere app van dit project: een nieuw wachtwoord geldt daar ook.
+3. **E-mailprovider aan.** Controleer bij *Authentication → Sign In /
+   Providers → Email* dat de provider *Email* aan staat. De rest van die
+   instellingen hoeft voor deze app niet te veranderen.
 4. **Redirect-URL.** Voeg bij *Authentication → URL Configuration → Redirect
-   URLs* de Pages-URL toe: `https://<gebruiker>.github.io/money-map/`.
-5. **Account.** De app maakt geen accounts aan (`shouldCreateUser: false`). Log
-   in met het e-mailadres dat al in dit project bestaat.
+   URLs* de Pages-URL toe: `https://<gebruiker>.github.io/money-map/`. Voor
+   inloggen met wachtwoord is dit niet strikt nodig, maar zo staat de app
+   netjes tussen de toegestane adressen.
+5. **Sessieduur.** De sessie blijft bewaard op het toestel en wordt vanzelf
+   ververst. Dat werkt zolang bij *Authentication → Sessions* geen *time-box*
+   of *inactivity timeout* is ingesteld (standaard staan die uit).
 6. Noteer de **Project URL** en de **publishable key** (`sb_publishable_…`)
    uit *Project Settings → API Keys*. De publishable key mag in de browser
    staan; de afscherming zit in Row Level Security.
@@ -53,8 +59,10 @@ De workflow zet `base` automatisch op de naam van de repo. Lokaal staat die in
 ### 3. Op de telefoon
 
 1. Open de Pages-URL in Safari → *Deel* → **Zet op beginscherm**.
-2. Open de app vanaf het beginscherm, vul je e-mailadres in en typ de code uit
-   de mail over. De sessie blijft bewaard.
+2. Open de app vanaf het beginscherm en log in met je e-mailadres en
+   wachtwoord. Log in vanuit de app op het beginscherm zelf: die heeft op iOS
+   een eigen opslag, los van Safari. De sessie blijft daarna bewaard; opnieuw
+   inloggen is alleen nodig na *Uitloggen* of als je het wachtwoord wijzigt.
 3. *Instellingen → Importeer startdata (JSON)* en kies je `startdata.json`
    (formaat: zie BRIEF.md). Twee keer importeren geeft geen dubbelen: posten
    met dezelfde naam en pot worden bijgewerkt.

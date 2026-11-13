@@ -12,9 +12,11 @@ export const supabase: SupabaseClient | null =
   !DEMO && url && sleutel
     ? createClient(url, sleutel, {
         auth: {
+          // De sessie staat in localStorage en wordt vanzelf ververst, zodat
+          // opnieuw inloggen zelden nodig is (ook in de app op het beginscherm).
           persistSession: true,
           autoRefreshToken: true,
-          // Inloggen gaat met een code, niet met een link in de URL.
+          // Inloggen gaat met wachtwoord; er komt nooit een sessie via de URL.
           detectSessionInUrl: false,
           storageKey: "hb-sessie",
         },
