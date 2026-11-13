@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { formatKort, isISODatum, plusDagen, plusMaand, vandaagISO } from "../logica/datum";
+import { formatEuro, parseSaldo } from "../logica/geld";
 import { heeftTermijnen } from "../logica/termijnen";
 import { weekblokken } from "../logica/weken";
 import { Blad } from "./Blad";
 import { useBoek, useStaat } from "./context";
+import { SaldoVeld, saldoInvoer } from "./SaldoVeld";
 
 export function NieuwePeriode({ onSluit }: { onSluit: () => void }) {
   const boek = useBoek();
@@ -12,6 +14,9 @@ export function NieuwePeriode({ onSluit }: { onSluit: () => void }) {
   const [volgende, setVolgende] = useState(plusMaand(vandaagISO()));
   const [volgendeAangepast, setVolgendeAangepast] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
+  // Voorstel: het saldo van de lopende periode zoals het nu is (of 0).
+  const [eindsaldo] = useState(() => boek.eindsaldoLopende());
+  const [saldo, setSaldo] = useState(() => saldoInvoer(eindsaldo));
 
   const geldig = isISODatum(start) && isISODatum(volgende) && volgende > start;
   const blokken = geldig
@@ -31,7 +36,12 @@ export function NieuwePeriode({ onSluit }: { onSluit: () => void }) {
       setFout("De volgende salarisdatum moet na de startdatum liggen.");
       return;
     }
-    const melding = boek.startPeriode(start, volgende);
+    const startsaldo = parseSaldo(saldo.tekst, saldo.negatief);
+    if (startsaldo == null) {
+      setFout("Vul bij het startsaldo een bedrag in, bijvoorbeeld 12,50.");
+      return;
+    }
+    const melding = boek.startPeriode(start, volgende, startsaldo);
     if (melding) setFout(melding);
     else onSluit();
   };
@@ -65,6 +75,17 @@ export function NieuwePeriode({ onSluit }: { onSluit: () => void }) {
             }}
           />
         </label>
+
+        <SaldoVeld
+          label="Startsaldo (vóór dit salaris)"
+          waarde={saldo}
+          onWijzig={setSaldo}
+        />
+        <p className="hb-hint">
+          {lopende
+            ? `Het saldo van de vorige periode staat nu op ${formatEuro(eindsaldo)}. Pas het aan als er iets anders op je rekening stond.`
+            : "Wat er op je rekening stond voordat dit salaris binnenkwam."}
+        </p>
 
         {geldig && (
           <ul className="hb-opsomming">

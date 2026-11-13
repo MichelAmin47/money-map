@@ -22,6 +22,8 @@ export interface Periode {
   salaris: Centen;
   verdeling: Verdeling;
   weekStartDag: number;
+  /** Wat er op de rekening stond vóór het salaris van deze periode. Kan negatief zijn. */
+  startsaldo: Centen;
 }
 
 export interface Uitgave {
@@ -39,6 +41,7 @@ export interface WeekOverzicht {
   blok: Weekblok;
   vast: WeekStand;
   persoonlijk: WeekStand;
+  /** Alle uitgaven met een datum in dit blok, ook die uit de pot Extra. */
   uitgaven: Uitgave[];
 }
 
@@ -52,12 +55,45 @@ export interface PotOverzicht {
   over: Centen;
 }
 
+export interface SaldoOverzicht {
+  startsaldo: Centen;
+  salaris: Centen;
+  /** Som van de vaste lasten met een V, in beide potten. */
+  betaald: Centen;
+  /** Som van alle uitgaven in de periode, in alle drie de potten. */
+  uitgaven: Centen;
+  /** startsaldo + salaris − (betaald + uitgaven) */
+  saldo: Centen;
+}
+
+/**
+ * Het saldo zoals het in de sheet stond: wat er nu op de rekening hoort te
+ * staan. Vaste lasten tellen pas mee als ze een V hebben; ontvangen geld is
+ * een negatief bedrag en telt dus vanzelf op.
+ */
+export function berekenSaldo(
+  periode: Pick<Periode, "startsaldo" | "salaris">,
+  regels: Pick<PeriodeRegel, "bedrag" | "betaald">[],
+  uitgaven: Pick<Uitgave, "bedrag">[],
+): SaldoOverzicht {
+  const betaald = som(regels.filter((r) => r.betaald).map((r) => r.bedrag));
+  const uit = som(uitgaven.map((u) => u.bedrag));
+  return {
+    startsaldo: periode.startsaldo,
+    salaris: periode.salaris,
+    betaald,
+    uitgaven: uit,
+    saldo: periode.startsaldo + periode.salaris - (betaald + uit),
+  };
+}
+
 export interface Overzicht {
   vast: PotOverzicht;
   persoonlijk: PotOverzicht;
   extra: { budget: Centen; uitgegeven: Centen; over: Centen };
   weken: WeekOverzicht[];
   status: { betaald: number; totaal: number; openstaand: Centen };
+  saldo: SaldoOverzicht;
 }
 
 /** Alle cijfers van één periode, afgeleid uit de ruwe gegevens. */
@@ -117,6 +153,7 @@ export function berekenOverzicht(
       totaal: regels.length,
       openstaand: som(regels.filter((r) => !r.betaald).map((r) => r.bedrag)),
     },
+    saldo: berekenSaldo(periode, regels, uitgaven),
   };
 }
 

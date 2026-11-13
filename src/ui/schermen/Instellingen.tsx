@@ -13,9 +13,12 @@ const POTTEN = [
 
 export function Instellingen({
   onNieuwePeriode,
+  onSaldo,
   onUitloggen,
 }: {
   onNieuwePeriode: () => void;
+  /** Opent het blad met het saldo en het startsaldo van de periode in beeld. */
+  onSaldo: () => void;
   onUitloggen?: () => void;
 }) {
   const boek = useBoek();
@@ -191,9 +194,16 @@ export function Instellingen({
         <header className="hb-groep-kop">
           <h2>Periode</h2>
         </header>
-        <button className="hb-knop hb-knop-rustig hb-breed" onClick={onNieuwePeriode}>
-          Nieuwe periode starten…
-        </button>
+        <div className="hb-formulier">
+          <button className="hb-knop hb-knop-rustig" onClick={onNieuwePeriode}>
+            Nieuwe periode starten…
+          </button>
+          {s.periodes.length > 0 && (
+            <button className="hb-knop hb-knop-rustig" onClick={onSaldo}>
+              Saldo en startsaldo…
+            </button>
+          )}
+        </div>
       </section>
 
       <section className="hb-groep">
@@ -222,7 +232,7 @@ export function Instellingen({
             </p>
           )}
           <p className="hb-hint">
-            De export bevat je instellingen, vaste lasten en alle periodes. De import leest het
+            De export bevat je instellingen, vaste lasten en alle periodes (met startsaldo). De import leest het
             formaat van <code>startdata.json</code>: instellingen, vaste lasten en winkels.
           </p>
         </div>

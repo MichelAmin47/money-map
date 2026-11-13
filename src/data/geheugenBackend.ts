@@ -57,7 +57,10 @@ export function maakGeheugenBackend(): Backend & { laatMislukken: (aan: boolean)
       return {
         instellingen: d.instellingen,
         vasteLasten: [...d.vasteLasten].sort((a, b) => a.volgorde - b.volgorde),
-        periodes: [...d.periodes].sort((a, b) => a.startdatum.localeCompare(b.startdatum)),
+        periodes: d.periodes
+          // Periodes van vóór het saldo hebben nog geen startsaldo.
+          .map((p) => ({ ...p, startsaldo: p.startsaldo ?? 0 }))
+          .sort((a, b) => a.startdatum.localeCompare(b.startdatum)),
         recent: [...d.uitgaven]
           .sort((a, b) => b.aangemaaktOp.localeCompare(a.aangemaaktOp))
           .map(({ omschrijving, pot }) => ({ omschrijving, pot })),

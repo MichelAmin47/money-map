@@ -54,6 +54,11 @@ export interface WeekStand {
   uitgegeven: Centen;
   /** beschikbaar − uitgegeven; schuift door naar de volgende week. */
   over: Centen;
+  /**
+   * basis − uitgegeven: wat deze week van haar eigen weekbedrag over is,
+   * zonder doorschuiven. Dit staat in de ingeklapte weekrij.
+   */
+  eigenOver: Centen;
 }
 
 /**
@@ -67,7 +72,7 @@ export function schuifDoor(basis: Centen[], uitgegeven: Centen[]): WeekStand[] {
     const uit = uitgegeven[i] ?? 0;
     const beschikbaar = b + doorgeschoven;
     const over = beschikbaar - uit;
-    standen.push({ basis: b, doorgeschoven, beschikbaar, uitgegeven: uit, over });
+    standen.push({ basis: b, doorgeschoven, beschikbaar, uitgegeven: uit, over, eigenOver: b - uit });
     doorgeschoven = over;
   });
   return standen;

@@ -1,6 +1,6 @@
 import { plusDagen, type ISODatum } from "../logica/datum";
 import { naarEuro, type Centen } from "../logica/geld";
-import type { Periode, Uitgave } from "../logica/overzicht";
+import { berekenSaldo, type Periode, type Uitgave } from "../logica/overzicht";
 import { STANDAARD_VERDELING, type Pot, type WeekPot } from "../logica/potten";
 import { importSleutel, type Startdata } from "../logica/startdata";
 import { bouwNieuwePeriode, type PeriodeRegel, type VasteLast } from "../logica/termijnen";
@@ -177,8 +177,36 @@ export class Boek {
 
   // --- periodes ------------------------------------------------------------
 
-  /** Start een nieuwe periode. Geeft een foutmelding terug, of null als het gelukt is. */
-  startPeriode(startdatum: ISODatum, volgendeSalarisdatum: ISODatum): string | null {
+  /**
+   * Het saldo van de lopende periode op dit moment: het voorstel voor het
+   * startsaldo van de volgende periode. Zonder periode is het 0.
+   */
+  eindsaldoLopende(): Centen {
+    const lopende = this.lopende;
+    if (!lopende) return 0;
+    const d = this.staat.data[lopende.id] ?? LEEG;
+    return berekenSaldo(lopende, d.regels, d.uitgaven).saldo;
+  }
+
+  /** Past het startsaldo van een periode aan (het saldo in de kop rekent ermee). */
+  wijzigStartsaldo(periodeId: string, startsaldo: Centen): void {
+    const oud = this.staat.periodes.find((p) => p.id === periodeId);
+    if (!oud || oud.startsaldo === startsaldo) return;
+    const periode: Periode = { ...oud, startsaldo };
+    this.zet({ periodes: this.staat.periodes.map((p) => (p.id === periodeId ? periode : p)) });
+    this.bewaar((b) => b.bewaarPeriode(periode));
+  }
+
+  /**
+   * Start een nieuwe periode. Zonder `startsaldo` begint hij op het eindsaldo
+   * van de vorige periode (of op 0 als die er niet is). Geeft een foutmelding
+   * terug, of null als het gelukt is.
+   */
+  startPeriode(
+    startdatum: ISODatum,
+    volgendeSalarisdatum: ISODatum,
+    startsaldo: Centen = this.eindsaldoLopende(),
+  ): string | null {
     const vorige = this.lopende;
     if (volgendeSalarisdatum <= startdatum) {
       return "De volgende salarisdatum moet na de startdatum liggen.";
@@ -194,6 +222,7 @@ export class Boek {
       salaris: i.salaris,
       verdeling: i.verdeling,
       weekStartDag: i.weekStartDag,
+      startsaldo,
     };
     const vorigeRegels = vorige ? (this.staat.data[vorige.id]?.regels ?? []) : [];
     const { regels, gewijzigd } = bouwNieuwePeriode(
@@ -479,6 +508,7 @@ export class Boek {
       periodes.push({
         startdatum: p.startdatum,
         einddatum: p.einddatum,
+        startsaldo: naarEuro(p.startsaldo),
         salaris: naarEuro(p.salaris),
         verdeling: p.verdeling,
         weekStartDag: WEEKDAGEN[p.weekStartDag],
