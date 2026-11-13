@@ -2,8 +2,9 @@
 
 Persoonlijke budget-app (PWA) voor op de telefoon: salaris over drie potten, een
 weekpot die doorschuift, vaste lasten met een V-stempel, en termijnen die
-vanzelf meelopen. De volledige opdracht staat in [BRIEF.md](BRIEF.md); alleen
-het inloggen wijkt daarvan af (e-mail en wachtwoord in plaats van een code).
+vanzelf meelopen. [CLAUDE.md](CLAUDE.md) beschrijft hoe de app in elkaar zit
+en is leidend; [BRIEF.md](BRIEF.md) is de oorspronkelijke opdracht en op punten
+verouderd.
 
 - **Stack:** Vite + React + TypeScript, Supabase (Postgres + Auth), GitHub Pages.
 - **Geen persoonlijke data in de repo.** Salaris, vaste lasten en bedragen
@@ -17,11 +18,15 @@ De app gebruikt het bestaande project en maakt alleen objecten met het
 voorvoegsel `hb_` aan. Bestaande tabellen, functies en policies blijven
 ongemoeid.
 
-1. **Migratie draaien.** Open in het Supabase-dashboard de *SQL Editor*, plak
-   de inhoud van
-   [`supabase/migrations/20261113120000_hb_huishoudboek.sql`](supabase/migrations/20261113120000_hb_huishoudboek.sql)
-   en voer hem uit. (Of met de CLI: `supabase link` en daarna `supabase db push`.)
-   De migratie draait in één transactie: gaat er iets mis, dan verandert er niets.
+1. **Migraties draaien.** Open in het Supabase-dashboard de *SQL Editor* en
+   voer de bestanden uit `supabase/migrations/` in volgorde uit (of met de CLI:
+   `supabase link` en daarna `supabase db push`):
+   - [`20261113120000_hb_huishoudboek.sql`](supabase/migrations/20261113120000_hb_huishoudboek.sql):
+     de tabellen, RLS en rechten. Draait in één transactie.
+   - [`20261113180000_hb_periodes_startsaldo.sql`](supabase/migrations/20261113180000_hb_periodes_startsaldo.sql):
+     het startsaldo per periode. Voegt alleen een kolom toe en mag vaker
+     gedraaid worden. Vul daarna in de app het startsaldo van de lopende
+     periode in (tik op het saldo bovenaan).
 2. **Account met wachtwoord.** Inloggen gaat met e-mailadres en wachtwoord
    (`signInWithPassword`). De app heeft bewust geen registratie en geen
    "wachtwoord vergeten". Zet het wachtwoord in het dashboard:
@@ -97,9 +102,15 @@ VITE_DEMO=true npm run dev
 - **Weken.** Een weekblok begint op de ingestelde startdag (standaard
   zaterdag). Bij een periode horen de blokken waarvan die startdag in de
   periode valt; dat zijn er bij een maand altijd 4 of 5, en geen blok telt in
-  twee periodes mee. Dagen vóór de eerste startdag tellen bij week 1.
+  twee periodes mee. Het eerste blok begint op de startdatum van de periode
+  (dagen vóór de eerste startdag tellen bij week 1), het laatste eindigt op de
+  einddatum.
 - **Doorschuiven.** Beschikbaar = weekbedrag + wat de vorige week over was
-  (of tekort kwam).
+  (of tekort kwam). Een ingeklapte week toont alleen het eigen weekbedrag min
+  de uitgaven van die week.
+- **Saldo.** Startsaldo + salaris − (vaste lasten met een V + alle uitgaven
+  van de periode). Een nieuwe periode begint standaard op het saldo van de
+  vorige; het startsaldo is aan te passen via een tik op het saldo bovenaan.
 - **Termijnen.** Bij een nieuwe periode gaat elke termijnpost één verder; na
   de laatste termijn doet hij niet meer mee.
 - **Controle tegen de sheet** zit in de tests: salaris 4720,49 met 2488 aan
@@ -113,6 +124,7 @@ VITE_DEMO=true npm run dev
 | `src/data/` | Opslag: Supabase-backend, demo-backend, de store (`boek.ts`) en de opslag-wachtrij |
 | `src/ui/` | Schermen en onderdelen |
 | `supabase/migrations/` | SQL voor de `hb_`-tabellen, RLS-policies en rechten |
+| `CLAUDE.md` | Hoe de app werkt en waarom: begrippen, architectuur, datamodel, regels |
 | `reference/` | Het eerste prototype (alleen ter referentie) |
 
 ## Datamodel en afscherming
