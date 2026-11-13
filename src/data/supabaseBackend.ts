@@ -29,7 +29,7 @@ interface VasteLastRij {
   volgorde: number;
 }
 
-interface PeriodeRij {
+export interface PeriodeRij {
   id: string;
   startdatum: string;
   einddatum: string;
@@ -38,6 +38,8 @@ interface PeriodeRij {
   perc_persoonlijk: number;
   perc_extra: number;
   week_startdag: number;
+  /** Ontbreekt zolang de migratie met de kolom nog niet gedraaid is. */
+  startsaldo?: number | null;
 }
 
 interface RegelRij {
@@ -85,16 +87,17 @@ const vasteLastNaarRij = (v: VasteLast): VasteLastRij => ({
   volgorde: v.volgorde,
 });
 
-const periodeVanRij = (r: PeriodeRij): Periode => ({
+export const periodeVanRij = (r: PeriodeRij): Periode => ({
   id: r.id,
   startdatum: r.startdatum,
   einddatum: r.einddatum,
   salaris: naarCenten(Number(r.salaris)),
   verdeling: { vast: r.perc_vast, persoonlijk: r.perc_persoonlijk, extra: r.perc_extra },
   weekStartDag: r.week_startdag,
+  startsaldo: naarCenten(Number(r.startsaldo ?? 0)),
 });
 
-const periodeNaarRij = (p: Periode): PeriodeRij => ({
+export const periodeNaarRij = (p: Periode): PeriodeRij => ({
   id: p.id,
   startdatum: p.startdatum,
   einddatum: p.einddatum,
@@ -103,6 +106,7 @@ const periodeNaarRij = (p: Periode): PeriodeRij => ({
   perc_persoonlijk: p.verdeling.persoonlijk,
   perc_extra: p.verdeling.extra,
   week_startdag: p.weekStartDag,
+  startsaldo: naarEuro(p.startsaldo),
 });
 
 const regelVanRij = (r: RegelRij): PeriodeRegel => ({

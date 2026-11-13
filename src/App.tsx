@@ -10,6 +10,7 @@ import { formatEuro } from "./logica/geld";
 import { BoekContext, useBeeld, useBoek, useStaat } from "./ui/context";
 import { Inloggen } from "./ui/Inloggen";
 import { NieuwePeriode } from "./ui/NieuwePeriode";
+import { SaldoBlad } from "./ui/SaldoBlad";
 import { Extra } from "./ui/schermen/Extra";
 import { Instellingen } from "./ui/schermen/Instellingen";
 import { Vandaag } from "./ui/schermen/Vandaag";
@@ -133,6 +134,7 @@ function Schil({ onUitloggen }: { onUitloggen?: () => void }) {
   const beeld = useBeeld();
   const tab = useTab();
   const [nieuwePeriode, setNieuwePeriode] = useState(false);
+  const [saldoOpen, setSaldoOpen] = useState(false);
 
   // Zodra er weer verbinding is: wachtende wijzigingen opnieuw proberen.
   useEffect(() => {
@@ -202,6 +204,22 @@ function Schil({ onUitloggen }: { onUitloggen?: () => void }) {
             ›
           </button>
         </div>
+        {overzicht && (
+          <button
+            className="hb-saldo"
+            onClick={() => setSaldoOpen(true)}
+            aria-label={`Saldo ${formatEuro(overzicht.saldo.saldo)}: opbouw bekijken`}
+          >
+            <span className="hb-saldo-label">Saldo</span>
+            <span
+              className={
+                overzicht.saldo.saldo < 0 ? "hb-saldo-bedrag hb-rood" : "hb-saldo-bedrag"
+              }
+            >
+              {formatEuro(overzicht.saldo.saldo)}
+            </span>
+          </button>
+        )}
         {overzicht && (
           <div className="hb-status">
             {overzicht.status.betaald} van {overzicht.status.totaal} betaald
@@ -275,7 +293,11 @@ function Schil({ onUitloggen }: { onUitloggen?: () => void }) {
             {tab === "vast" && <VasteLasten />}
             {tab === "extra" && <Extra />}
             {tab === "instellingen" && (
-              <Instellingen onNieuwePeriode={openNieuwePeriode} onUitloggen={onUitloggen} />
+              <Instellingen
+                onNieuwePeriode={openNieuwePeriode}
+                onSaldo={() => setSaldoOpen(true)}
+                onUitloggen={onUitloggen}
+              />
             )}
           </>
         )}
@@ -295,6 +317,14 @@ function Schil({ onUitloggen }: { onUitloggen?: () => void }) {
       </nav>
 
       {nieuwePeriode && <NieuwePeriode onSluit={() => setNieuwePeriode(false)} />}
+      {saldoOpen && periode && overzicht && (
+        <SaldoBlad
+          periode={periode}
+          saldo={overzicht.saldo}
+          bewerkbaar={bewerkbaar}
+          onSluit={() => setSaldoOpen(false)}
+        />
+      )}
     </div>
   );
 }

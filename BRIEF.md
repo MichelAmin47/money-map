@@ -1,5 +1,7 @@
 # Opdracht: Huishoudboek-webapp (PWA)
 
+> **Let op:** dit is de oorspronkelijke opdracht. Hij is op punten verouderd (bijvoorbeeld het inloggen, dat nu met e-mail en wachtwoord gaat). [`CLAUDE.md`](CLAUDE.md) is leidend.
+
 Bouw een persoonlijke budget-app voor één gebruiker, voor dagelijks gebruik op de telefoon. Hij vervangt een Google Sheet die de gebruiker nu elke maand met de hand bijhoudt. De gebruiker wil zelf invoeren: **geen bankkoppeling, geen CSV-import**. Het doel is sneller invoeren en beter overzicht.
 
 `reference/huishoudboek.jsx` is een eerste prototype. Neem daar de look & feel en de basislogica uit over. Kopieer de opslaglaag niet: die gebruikt `window.storage`, en dat bestaat buiten Claude niet.

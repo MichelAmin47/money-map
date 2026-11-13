@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { plusDagen, plusMaand } from "./datum";
+import { dagVanWeek, plusDagen, plusMaand } from "./datum";
 import { formatEuro, formatInvoer, naarCenten, parseBedrag } from "./geld";
 import { berekenOverzicht, topWinkels, type Periode, type Uitgave } from "./overzicht";
 import {
@@ -99,6 +99,13 @@ describe("doorschuiven per week", () => {
     expect(s[1]).toMatchObject({ doorgeschoven: 4000, beschikbaar: 14000, over: 14000 });
     expect(s[2]).toMatchObject({ doorgeschoven: 14000, beschikbaar: 24000 });
   });
+  it("eigenOver is het weekbedrag min de uitgaven van die week, zonder doorschuiven", () => {
+    const s = schuifDoor([10000, 10000, 10000], [6000, 13000, -500]);
+    expect(s.map((w) => w.eigenOver)).toEqual([4000, -3000, 10500]);
+    // Het doorschuiven zelf verandert er niet door.
+    expect(s.map((w) => w.beschikbaar)).toEqual([10000, 14000, 11000]);
+    expect(s.map((w) => w.over)).toEqual([4000, 1000, 11500]);
+  });
   it("trekt een overschrijding af van de volgende week", () => {
     const s = schuifDoor([10000, 10000, 10000], [13000, 2000, 0]);
     expect(s[0]!.over).toBe(-3000);
@@ -131,25 +138,92 @@ describe("weekindeling", () => {
       "31 t/m 6",
       "7 t/m 13",
       "14 t/m 20",
-      "21 t/m 27",
+      // Het laatste blok eindigt op de einddatum van de periode.
+      "21 t/m 23",
     ]);
     expect(b.map((x) => x.nr)).toEqual([1, 2, 3, 4, 5]);
   });
-  it("periode die midden in de week begint: eerste blok start op de eerstvolgende startdag", () => {
+  it("periode die midden in de week begint: de dagen vóór de eerste startdag horen bij blok 1", () => {
     // 23 sep 2026 is een woensdag; de eerste zaterdag is 26 sep.
     const b = weekblokken("2026-09-23", "2026-10-22", ZATERDAG);
-    expect(b[0]!.start).toBe("2026-09-26");
-    expect(b.map((x) => x.label)).toEqual(["26 t/m 2", "3 t/m 9", "10 t/m 16", "17 t/m 23"]);
+    expect(b[0]).toMatchObject({ start: "2026-09-23", eind: "2026-10-02" });
+    expect(b[1]!.start).toBe("2026-10-03");
+    expect(b.map((x) => x.label)).toEqual(["23 t/m 2", "3 t/m 9", "10 t/m 16", "17 t/m 22"]);
+  });
+  it("labels: het eerste blok begint op de startdatum, het laatste eindigt op de einddatum", () => {
+    // 13 nov 2026 is een vrijdag; de periode loopt t/m donderdag 17 dec.
+    const b = weekblokken("2026-11-13", "2026-12-17", MAANDAG);
+    expect(b.map((x) => x.label)).toEqual([
+      "13 t/m 22",
+      "23 t/m 29",
+      "30 t/m 6",
+      "7 t/m 13",
+      "14 t/m 17",
+    ]);
+    expect(b[0]).toMatchObject({ start: "2026-11-13", eind: "2026-11-22" });
+    expect(b.at(-1)).toMatchObject({ start: "2026-12-14", eind: "2026-12-17" });
+    // 13 t/m 15 november tellen bij blok 1.
+    for (const d of ["2026-11-13", "2026-11-14", "2026-11-15", "2026-11-16", "2026-11-22"]) {
+      expect(weekIndexVoorDatum(b, d)).toBe(0);
+    }
+    expect(weekIndexVoorDatum(b, "2026-11-23")).toBe(1);
+    expect(weekIndexVoorDatum(b, "2026-12-17")).toBe(4);
+    // 18 t/m 20 december vallen in de volgende periode: daar is het blok 1.
+    const volgende = weekblokken("2026-12-18", "2027-01-17", MAANDAG);
+    expect(volgende[0]).toMatchObject({ start: "2026-12-18", eind: "2026-12-27", label: "18 t/m 27" });
+    expect(weekIndexVoorDatum(volgende, "2026-12-20")).toBe(0);
+  });
+  it("de blokken dekken de periode precies, zonder gaten of overlap", () => {
+    for (let dag = 1; dag <= 28; dag++) {
+      for (let startdag = 0; startdag < 7; startdag++) {
+        const start = `2026-03-${String(dag).padStart(2, "0")}`;
+        const eind = plusDagen(plusMaand(start), -1);
+        const b = weekblokken(start, eind, startdag);
+        expect(b[0]!.start).toBe(start);
+        expect(b.at(-1)!.eind).toBe(eind);
+        for (let i = 1; i < b.length; i++) {
+          expect(b[i]!.start).toBe(plusDagen(b[i - 1]!.eind, 1));
+          expect(dagVanWeek(b[i]!.start)).toBe(startdag);
+        }
+      }
+    }
+  });
+  it("de toewijzing van datums aan blokken is dezelfde als vóór de nieuwe labels", () => {
+    // De oude indeling: blokken van precies 7 dagen vanaf de eerste startdag,
+    // met dagen ervoor in het eerste en dagen erna in het laatste blok.
+    const oud = (start: string, eind: string, startdag: number, datum: string): number => {
+      let cursor = plusDagen(start, (startdag - dagVanWeek(start) + 7) % 7);
+      if (cursor > eind) cursor = start;
+      const starts: string[] = [];
+      for (; cursor <= eind; cursor = plusDagen(cursor, 7)) starts.push(cursor);
+      for (let i = starts.length - 1; i >= 0; i--) if (datum >= starts[i]!) return i;
+      return 0;
+    };
+    for (const start of ["2026-11-13", "2026-09-23", "2026-10-24", "2026-01-31", "2026-03-02"]) {
+      for (const lengte of [3, 27, 30, 35]) {
+        for (let startdag = 0; startdag < 7; startdag++) {
+          const eind = plusDagen(start, lengte);
+          const b = weekblokken(start, eind, startdag);
+          // Ook een week vóór en na de periode: die tellen in het eerste/laatste blok.
+          for (let d = -7; d <= lengte + 7; d++) {
+            const datum = plusDagen(start, d);
+            expect(weekIndexVoorDatum(b, datum)).toBe(oud(start, eind, startdag, datum));
+          }
+        }
+      }
+    }
   });
   it("andere startdagen geven andere blokken", () => {
     const ma = weekblokken("2026-09-23", "2026-10-22", MAANDAG);
-    expect(ma[0]!.start).toBe("2026-09-28");
+    // Blok 1 loopt vanaf de startdatum tot de dag vóór de tweede startdag.
+    expect(ma[0]!.eind).toBe("2026-10-04");
+    expect(ma[1]!.start).toBe("2026-10-05");
     expect(ma).toHaveLength(4);
     const zo = weekblokken("2026-09-23", "2026-10-22", ZONDAG);
-    expect(zo[0]!.start).toBe("2026-09-27");
+    expect(zo[1]!.start).toBe("2026-10-04");
     expect(zo).toHaveLength(4);
     const wo = weekblokken("2026-09-23", "2026-10-22", 3);
-    expect(wo[0]!.start).toBe("2026-09-23");
+    expect(wo[0]).toMatchObject({ start: "2026-09-23", eind: "2026-09-29" });
     expect(wo).toHaveLength(5);
   });
   it("een periode van een maand heeft altijd 4 of 5 blokken", () => {
@@ -165,13 +239,15 @@ describe("weekindeling", () => {
   it("opeenvolgende periodes delen geen blok", () => {
     const a = weekblokken("2026-09-23", "2026-10-22", ZATERDAG);
     const b = weekblokken("2026-10-23", "2026-11-22", ZATERDAG);
-    expect(b[0]!.start > a.at(-1)!.start).toBe(true);
-    expect(b[0]!.start).toBe("2026-10-24");
+    expect(a.at(-1)!.eind).toBe("2026-10-22");
+    expect(b[0]!.start).toBe("2026-10-23");
+    // De eerste zaterdag (24 okt) hoort bij de tweede periode, niet bij de eerste.
+    expect(weekIndexVoorDatum(b, "2026-10-24")).toBe(0);
   });
   it("heel korte periode zonder startdag erin: één blok vanaf de start", () => {
     const b = weekblokken("2026-09-21", "2026-09-23", ZATERDAG);
     expect(b).toHaveLength(1);
-    expect(b[0]!.start).toBe("2026-09-21");
+    expect(b[0]).toMatchObject({ start: "2026-09-21", eind: "2026-09-23", label: "21 t/m 23" });
   });
   it("zet een datum in het juiste blok", () => {
     const b = weekblokken("2026-09-23", "2026-10-22", ZATERDAG);
@@ -257,6 +333,15 @@ describe("termijnen bij een nieuwe periode", () => {
     expect(lasten[0]!.actief).toBe(false);
   });
 
+  it("een eenmalige post is een termijn 1/1: telt één periode mee en verdwijnt daarna", () => {
+    const eenmalig = vl({ id: "e", termijnHuidig: 1, termijnTotaal: 1 });
+    const eerste = bouwNieuwePeriode([eenmalig], [], "p1", nieuwId);
+    expect(eerste.regels[0]).toMatchObject({ termijnNr: 1, termijnTotaal: 1 });
+    expect(termijnLabel(eerste.regels[0]!)).toBe("e · 1/1");
+    const tweede = bouwNieuwePeriode([eenmalig], eerste.regels, "p2", nieuwId);
+    expect(tweede.regels).toEqual([]);
+    expect(tweede.gewijzigd).toEqual([{ ...eenmalig, actief: false }]);
+  });
   it("slaat inactieve posten over", () => {
     const { regels } = bouwNieuwePeriode([vl({ id: "oud", actief: false })], [], "p1", nieuwId);
     expect(regels).toEqual([]);
@@ -271,6 +356,7 @@ describe("overzicht van een periode", () => {
     salaris: naarCenten(4720.49),
     verdeling: STANDAARD_VERDELING,
     weekStartDag: ZATERDAG,
+    startsaldo: 0,
   };
   const regel = (o: Partial<PeriodeRegel>): PeriodeRegel => ({
     id: Math.random().toString(),
@@ -335,6 +421,41 @@ describe("overzicht van een periode", () => {
     expect(o.persoonlijk.over).toBe(118012 - 15000);
     // Extra telt niet mee in de weekpotten.
     expect(o.weken[1]!.vast.uitgegeven).toBe(0);
+  });
+
+  it("de ingeklapte weekrij: eigen weekbedrag min de uitgaven van die week", () => {
+    const o = berekenOverzicht(
+      periode,
+      [],
+      [
+        uit({ datum: "2026-10-25", bedrag: 2200, pot: "vast" }),
+        uit({ datum: "2026-11-01", bedrag: 1000, pot: "vast" }),
+      ],
+    );
+    const basis = verdeelOverWeken(o.vast.weekpot, 5);
+    // Week 2 toont niet "beschikbaar" (met het overschot van week 1 erbij)…
+    expect(o.weken[1]!.vast.beschikbaar).toBe(basis[1]! + basis[0]! - 2200);
+    // …maar alleen het eigen bedrag van die week.
+    expect(o.weken[1]!.vast.eigenOver).toBe(basis[1]! - 1000);
+    expect(o.weken[2]!.vast.eigenOver).toBe(basis[2]!);
+  });
+
+  it("uitgaven uit de pot Extra tellen niet mee in de weekbedragen", () => {
+    const zonder = berekenOverzicht(periode, [], []);
+    const met = berekenOverzicht(
+      periode,
+      [],
+      [
+        uit({ datum: "2026-10-25", bedrag: 50000, pot: "extra" }),
+        uit({ datum: "2026-11-02", bedrag: -7300, pot: "extra" }),
+      ],
+    );
+    expect(met.weken.map((w) => [w.vast, w.persoonlijk])).toEqual(
+      zonder.weken.map((w) => [w.vast, w.persoonlijk]),
+    );
+    expect(met.vast.over).toBe(zonder.vast.over);
+    expect(met.persoonlijk.over).toBe(zonder.persoonlijk.over);
+    expect(met.extra.uitgegeven).toBe(42700);
   });
 });
 

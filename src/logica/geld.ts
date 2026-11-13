@@ -46,3 +46,16 @@ export function parseBedrag(invoer: string): Centen | null {
   if (!Number.isFinite(n)) return null;
   return teken * Math.round(n * 100);
 }
+
+/**
+ * Leest een saldo dat ook negatief kan zijn. Het numerieke toetsenbord van iOS
+ * heeft geen minteken, dus "negatief" komt van een aparte schakelaar. Een leeg
+ * veld is 0; een getypt minteken telt ook.
+ */
+export function parseSaldo(invoer: string, negatief: boolean): Centen | null {
+  if (invoer.trim() === "") return 0;
+  const centen = parseBedrag(invoer);
+  if (centen == null) return null;
+  if (centen < 0) return centen;
+  return negatief && centen !== 0 ? -centen : centen;
+}

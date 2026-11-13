@@ -176,6 +176,71 @@ describe("Boek", () => {
     expect([...db.uitgaven.values()].map((u) => u.omschrijving)).toEqual(["Jumbo", "Slager"]);
   });
 
+  it("eerste periode begint op startsaldo 0", async () => {
+    const { boek, db } = await nieuwBoek();
+    boek.startPeriode("2026-10-24", "2026-11-24");
+    await rust();
+    expect(boek.momentopname().periodes[0]!.startsaldo).toBe(0);
+    expect([...db.periodes.values()][0]!.startsaldo).toBe(0);
+  });
+
+  it("nieuwe periode neemt standaard het eindsaldo van de vorige over", async () => {
+    const { boek, db } = await nieuwBoek();
+    boek.importeer(START, false);
+    boek.startPeriode("2026-10-24", "2026-11-24");
+    const pid = boek.momentopname().periodeId!;
+    boek.wijzigStartsaldo(pid, 1900);
+    const [huur, water] = regelsVan(boek);
+    boek.wijzigRegel({ ...huur!, betaald: true });
+    const basis = { datum: "2026-10-25", omschrijving: "Jumbo" };
+    boek.voegUitgaveToe(pid, { ...basis, bedrag: 20000, pot: "vast" });
+    boek.voegUitgaveToe(pid, { ...basis, bedrag: 4700, pot: "extra" });
+    boek.voegUitgaveToe(pid, { ...basis, bedrag: -1000, pot: "persoonlijk" });
+
+    // startsaldo + salaris − (vaste lasten met een V + alle uitgaven)
+    const eindsaldo = 1900 + 472049 - (200000 + 20000 + 4700 - 1000);
+    expect(boek.eindsaldoLopende()).toBe(eindsaldo);
+    // Een vaste last zonder V telt nog niet mee; met een V wel.
+    boek.wijzigRegel({ ...water!, betaald: true });
+    expect(boek.eindsaldoLopende()).toBe(eindsaldo - 48800);
+
+    expect(boek.startPeriode("2026-11-24", "2026-12-24")).toBeNull();
+    const nieuw = boek.momentopname().periodes.at(-1)!;
+    expect(nieuw.startsaldo).toBe(eindsaldo - 48800);
+    await rust();
+    expect(db.periodes.get(nieuw.id)!.startsaldo).toBe(eindsaldo - 48800);
+    // De vorige periode houdt zijn eigen startsaldo.
+    expect(db.periodes.get(pid)!.startsaldo).toBe(1900);
+  });
+
+  it("het startsaldo is bij het starten aan te passen en later te wijzigen", async () => {
+    const { boek, db } = await nieuwBoek();
+    boek.importeer(START, false);
+    boek.startPeriode("2026-10-24", "2026-11-24");
+    boek.startPeriode("2026-11-24", "2026-12-24", -2500);
+    const p = boek.momentopname().periodes.at(-1)!;
+    expect(p.startsaldo).toBe(-2500);
+    boek.wijzigStartsaldo(p.id, 1234);
+    expect(boek.momentopname().periodes.at(-1)!.startsaldo).toBe(1234);
+    await rust();
+    expect(db.periodes.get(p.id)!.startsaldo).toBe(1234);
+    // Instellingen bewaren werkt de lopende periode bij, maar laat het startsaldo staan.
+    boek.bewaarInstellingen({ ...START.instellingen, salaris: 500000 });
+    await rust();
+    expect(db.periodes.get(p.id)).toMatchObject({ salaris: 500000, startsaldo: 1234 });
+  });
+
+  it("export bevat het startsaldo van elke periode", async () => {
+    const { boek } = await nieuwBoek();
+    boek.startPeriode("2026-10-24", "2026-11-24", 1900);
+    boek.startPeriode("2026-11-24", "2026-12-24", -250);
+    const json = (await boek.exporteer()) as { periodes: { startdatum: string; startsaldo: number }[] };
+    expect(json.periodes.map((p) => [p.startdatum, p.startsaldo])).toEqual([
+      ["2026-10-24", 19],
+      ["2026-11-24", -2.5],
+    ]);
+  });
+
   it("vervangen bij import haalt de oude vaste lasten weg, ook uit de lopende periode", async () => {
     const { boek, db } = await nieuwBoek();
     boek.importeer(START, false);
