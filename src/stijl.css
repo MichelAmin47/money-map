@@ -183,18 +183,6 @@ code {
 .hb-saldo-negatief {
   flex-shrink: 0;
 }
-.hb-status {
-  text-align: center;
-  font-size: 13px;
-  color: var(--inkt-zacht);
-  margin-top: 2px;
-}
-.hb-status strong {
-  font-family: var(--mono);
-  font-weight: 500;
-  color: var(--inkt);
-}
-
 /* ---------- meldingen ---------- */
 
 .hb-fout {
@@ -647,6 +635,32 @@ code {
 .hb-invoer {
   margin-top: 14px;
 }
+/* Ingeklapt: alleen de knop "+ Uitgave". Open: kop met "Klaar" en het formulier. */
+.hb-invoer-open {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+}
+.hb-invoer-vak {
+  margin-top: 14px;
+  border-top: 2px solid var(--inkt);
+}
+.hb-invoer-kop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 6px;
+}
+.hb-invoer-kop h3 {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 400;
+  margin: 0;
+}
+.hb-invoer-vak .hb-invoer {
+  margin-top: 6px;
+}
 .hb-invoer-rij {
   display: flex;
   gap: 8px;
@@ -1015,6 +1029,24 @@ select.hb-veld {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Kop van Extra: rechts wat er nog over is in de pot. */
+.hb-ov-kolom .hb-ov-kop-over {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  /* Vaste regelhoogte: de kop blijft even hoog als die van de andere lijsten. */
+  line-height: 14px;
+}
+.hb-ov-kop-over .hb-ov-bedrag {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--inkt);
+}
+.hb-ov-kop-over .hb-ov-bedrag.hb-rood {
+  color: var(--rood);
 }
 .hb-ov-lijst {
   list-style: none;

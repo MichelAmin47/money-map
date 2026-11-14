@@ -2,7 +2,7 @@ import { useState } from "react";
 import { vandaagISO } from "../../logica/datum";
 import { weekIndexVoorDatum } from "../../logica/weken";
 import { useBeeld } from "../context";
-import { UitgaveFormulier } from "../UitgaveFormulier";
+import { UitgaveInvoer } from "../UitgaveInvoer";
 import { WeekBlok } from "../WeekBlok";
 
 export function Weken() {
@@ -36,7 +36,7 @@ export function Weken() {
             bewerkbaar={bewerkbaar}
           >
             {bewerkbaar && (
-              <UitgaveFormulier
+              <UitgaveInvoer
                 key={datum}
                 periodeId={periode.id}
                 standaardDatum={datum}

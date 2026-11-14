@@ -223,17 +223,6 @@ function Schil({ onUitloggen }: { onUitloggen?: () => void }) {
             </span>
           </button>
         )}
-        {overzicht && (
-          <div className="hb-status">
-            {overzicht.status.betaald} van {overzicht.status.totaal} betaald
-            {overzicht.status.openstaand > 0 && (
-              <>
-                {" "}
-                · nog <strong>{formatEuro(overzicht.status.openstaand)}</strong> te gaan
-              </>
-            )}
-          </div>
-        )}
       </header>
 
       {s.opslag.fout && (

@@ -2,7 +2,7 @@ import { vandaagISO } from "../../logica/datum";
 import { weekIndexVoorDatum } from "../../logica/weken";
 import { useBeeld } from "../context";
 import { Potten } from "../Potten";
-import { UitgaveFormulier } from "../UitgaveFormulier";
+import { UitgaveInvoer } from "../UitgaveInvoer";
 import { WeekBlok } from "../WeekBlok";
 
 export function Vandaag() {
@@ -50,12 +50,7 @@ export function Vandaag() {
 
       {week ? (
         <WeekBlok week={week} open isNu bewerkbaar={bewerkbaar}>
-          <UitgaveFormulier
-            periodeId={periode.id}
-            standaardDatum={vandaag}
-            termijnenMogelijk
-            autoFocus
-          />
+          <UitgaveInvoer periodeId={periode.id} standaardDatum={vandaag} termijnenMogelijk />
         </WeekBlok>
       ) : (
         <p className="hb-hint">

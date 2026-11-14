@@ -1,7 +1,7 @@
 import { vandaagISO } from "../../logica/datum";
 import { formatEuro } from "../../logica/geld";
 import { useBeeld } from "../context";
-import { UitgaveFormulier } from "../UitgaveFormulier";
+import { UitgaveInvoer } from "../UitgaveInvoer";
 import { UitgavenLijst } from "../WeekBlok";
 
 export function Extra() {
@@ -39,7 +39,7 @@ export function Extra() {
       </section>
 
       {bewerkbaar && (
-        <UitgaveFormulier
+        <UitgaveInvoer
           periodeId={periode.id}
           standaardDatum={isLopende ? vandaagISO() : periode.startdatum}
           standaardPot="extra"
