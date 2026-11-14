@@ -21,9 +21,9 @@ import { Weken } from "./ui/schermen/Weken";
 const TABS = [
   ["vandaag", "Vandaag"],
   ["weken", "Weken"],
-  ["overzicht", "Overzicht"],
   ["vast", "Vaste lasten"],
   ["extra", "Extra"],
+  ["overzicht", "Overzicht"],
   // Kort label: met zes tabs past "Instellingen" niet op 360px.
   ["instellingen", "Instellen", "Instellingen"],
 ] as const;

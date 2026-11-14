@@ -302,7 +302,7 @@ src/
   `isLopende` en `bewerkbaar`. Schermen lezen daaruit en roepen acties op
   `useBoek()` aan.
 - **Tabs via de hash** (`#/weken`), zodat verversen op GitHub Pages geen 404
-  geeft. Er zijn zes tabs: Vandaag, Weken, Overzicht, Vaste lasten, Extra en
+  geeft. Er zijn zes tabs: Vandaag, Weken, Vaste lasten, Extra, Overzicht en
   Instellingen. Die laatste heet in de tabbalk "Instellen" (met het volledige
   woord als `aria-label`), zodat alle zes op 360px passen.
 - **Invoervelden voor bedragen** houden een string bij en parsen pas bij
@@ -567,7 +567,8 @@ Papier en inkt: een rustig kasboek, geen dashboard. Alle stijl staat in
   44px blijft.
 - **Kerncijfers in `src/logica`** (`berekenKerncijfers`), met de
   controlegetallen uit de sheet als test.
-- **Overzicht direct na Weken in de tabbalk**, en "Instellen" als kort label:
+- **Overzicht tussen Extra en Instellen in de tabbalk** (de invoertabs staan
+  bij elkaar, het leesscherm erna), en "Instellen" als kort label:
   zes tabs van 60px op 360px, zonder scrollen of verborgen tabs.
 - **Overzicht hergebruikt `WeekBlok`** met `alleenLezen`, zodat de weken er
   hetzelfde uitzien als op Weken.
