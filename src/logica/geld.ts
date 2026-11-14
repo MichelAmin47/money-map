@@ -15,6 +15,15 @@ const euroFormaat = new Intl.NumberFormat("nl-NL", {
 export const formatEuro = (centen: Centen): string =>
   euroFormaat.format(naarEuro(centen || 0));
 
+/**
+ * Bedrag met een los teken ervoor, voor een verschil of een doorgeschoven
+ * bedrag: "+ € 45,00" of "− € 12,00". Nul krijgt geen teken.
+ */
+export const formatMetTeken = (centen: Centen): string =>
+  centen === 0
+    ? formatEuro(0)
+    : `${centen < 0 ? "−" : "+"} ${formatEuro(Math.abs(centen))}`;
+
 /** Bedrag zonder €-teken, voor in invoervelden: 1234.5 → "1234,50". */
 export const formatInvoer = (centen: Centen): string =>
   naarEuro(centen).toFixed(2).replace(".", ",");

@@ -317,7 +317,7 @@ code {
   bottom: 0;
   z-index: 5;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   background: var(--papier-op);
   border-top: 2px solid var(--inkt);
   padding-bottom: env(safe-area-inset-bottom);
@@ -415,6 +415,7 @@ code {
 .hb-week-body {
   padding: 0 8px 16px;
 }
+/* Tabel met de opbouw van het saldo (SaldoBlad). */
 .hb-weektabel {
   width: 100%;
   border-collapse: collapse;
@@ -436,9 +437,6 @@ code {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--inkt-zacht);
-  /* Kolom plus de tussenruimte van 8px: zo staan de bedragen in de kop van
-     het blok, in deze tabel en in de uitgavenlijst recht onder elkaar. */
-  width: calc(var(--kolom) + 8px);
 }
 .hb-weektabel td {
   font-family: var(--mono);
@@ -453,6 +451,56 @@ code {
 }
 .hb-weektabel .hb-sterk td.hb-rood {
   color: var(--rood);
+}
+
+/* Kolomnamen boven de bedragen in de kop van een opengeklapte week. */
+.hb-week-kolomnaam {
+  font-family: var(--sans);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--inkt-zacht);
+  padding-bottom: 2px;
+}
+/* Doorgeschoven uit de vorige week: klein, recht onder de bedragen in de kop. */
+.hb-door {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--kolom) var(--kolom);
+  gap: 0 8px;
+  margin-top: -4px;
+  padding-bottom: 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--inkt-zacht);
+}
+.hb-door-label,
+.hb-door-cel {
+  display: flex;
+  flex-direction: column;
+}
+.hb-door-cel {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+/* Lijn tussen de kop (met de doorgeschoven-regel) en de uitgaven. */
+.hb-week-body > .hb-lijst {
+  border-top: 1px solid var(--lijn);
+}
+/* Alleen-lezen weekblok (scherm Overzicht): compacter, niets aan te tikken. */
+.hb-week-lees .hb-urij {
+  min-height: 0;
+  padding: 4px 0;
+}
+.hb-week-lees .hb-urij-naam {
+  font-size: 14px;
+}
+.hb-week-lees .hb-week-body {
+  padding-bottom: 8px;
+}
+.hb-week-lees .hb-leeg {
+  padding: 4px 0;
 }
 
 /* ---------- lijsten ---------- */
@@ -807,9 +855,37 @@ select.hb-veld {
 .hb-groep > .hb-knop {
   margin-top: 10px;
 }
+/* Een post is één rij van 44px: vakje (tikvlak 44×44, zichtbaar 22px) en
+   daarnaast de rij zelf, die het bewerkvenster opent. */
+.hb-post {
+  display: flex;
+  align-items: stretch;
+  min-height: var(--tik);
+}
+.hb-post-rij {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tik);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+}
+.hb-post-knop {
+  background: none;
+  border: none;
+  text-align: left;
+}
+.hb-post .hb-regel-naam {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .hb-stempel {
   width: var(--tik);
   height: var(--tik);
+  /* Het vakje staat links in het tikvlak; de marge eromheen is onzichtbaar. */
+  margin-left: -11px;
   flex-shrink: 0;
   background: none;
   border: none;
@@ -819,12 +895,12 @@ select.hb-veld {
   justify-content: center;
 }
 .hb-stempel span {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border: 1px solid var(--inkt-zacht);
   background: var(--wit);
   font-family: var(--serif);
-  font-size: 22px;
+  font-size: 18px;
   line-height: 1;
   color: var(--stempel);
   display: flex;
@@ -841,33 +917,8 @@ select.hb-veld {
   cursor: default;
 }
 .hb-regel-betaald .hb-regel-naam,
-.hb-regel-betaald .hb-bedragveld,
 .hb-regel-betaald .hb-regel-bedrag {
   color: var(--inkt-zacht);
-}
-.hb-naamknop {
-  background: none;
-  border: none;
-  padding: 0;
-  text-align: left;
-  min-height: var(--tik);
-}
-.hb-bedragveld {
-  width: 92px;
-  min-height: var(--tik);
-  flex-shrink: 0;
-  text-align: right;
-  border: 1px solid transparent;
-  border-bottom-color: var(--lijn);
-  background: transparent;
-  font-family: var(--mono);
-  font-size: 16px;
-  font-variant-numeric: tabular-nums;
-  padding: 4px 6px;
-}
-.hb-bedragveld:focus {
-  background: var(--wit);
-  border-color: var(--lijn);
 }
 .hb-termijnvelden .hb-veldlabel {
   width: 96px;
@@ -875,6 +926,182 @@ select.hb-veld {
 .hb-van {
   padding-bottom: 12px;
   color: var(--inkt-zacht);
+}
+
+/* ---------- overzicht (alleen lezen) ---------- */
+
+.hb-ov-deel {
+  margin-bottom: 22px;
+}
+.hb-ov-kern {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+  margin: 0;
+}
+.hb-ov-kern > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--lijn);
+}
+.hb-ov-kern dt,
+.hb-ov-potten thead th,
+.hb-ov-kolom h3 {
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--inkt-zacht);
+}
+.hb-ov-kern dd,
+.hb-ov-potten td,
+.hb-ov-bedrag,
+.hb-ov-open strong {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hb-ov-kern dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+.hb-ov-potten {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.hb-ov-potten th,
+.hb-ov-potten td {
+  padding: 4px 0 4px 8px;
+  text-align: right;
+  font-weight: 400;
+  border-bottom: 1px solid var(--lijn);
+}
+.hb-ov-potten th:first-child {
+  text-align: left;
+  padding-left: 0;
+}
+.hb-ov-potten td {
+  font-size: 12px;
+}
+.hb-ov-open {
+  margin: 8px 0 10px;
+  font-size: 14px;
+}
+.hb-ov-open strong {
+  font-weight: 500;
+}
+/* Telefoon: twee lijsten naast elkaar, Extra eronder over de volle breedte. */
+.hb-ov-kosten {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 12px;
+  align-items: start;
+}
+.hb-ov-extra {
+  grid-column: 1 / -1;
+}
+.hb-ov-kolom {
+  min-width: 0;
+}
+.hb-ov-kolom h3 {
+  margin: 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--inkt);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hb-ov-lijst {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.hb-ov-rij {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--lijn);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.hb-ov-naam {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hb-ov-bedrag {
+  flex-shrink: 0;
+  font-size: 11px;
+  text-align: right;
+}
+.hb-ov-datum {
+  flex-shrink: 0;
+  width: 44px;
+  color: var(--inkt-zacht);
+}
+/* Kleine V-stempel bij een afgevinkte post; leeg bij een open post. */
+.hb-ov-v {
+  flex-shrink: 0;
+  width: 10px;
+  font-family: var(--serif);
+  font-size: 13px;
+  line-height: 1;
+  color: var(--stempel);
+  transform: rotate(-9deg);
+}
+.hb-ov-betaald .hb-ov-naam,
+.hb-ov-betaald .hb-ov-bedrag {
+  color: var(--inkt-zacht);
+}
+.hb-ov-leeg {
+  padding: 4px 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--inkt-zacht);
+}
+
+@media (min-width: 900px) {
+  /* Het overzicht mag op een breed scherm de ruimte gebruiken. */
+  .hb-root-breed {
+    max-width: 1100px;
+  }
+  .hb-ov-kern {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .hb-ov-kern > div {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .hb-ov-kern dd {
+    font-size: 15px;
+  }
+  .hb-ov-potten {
+    max-width: 520px;
+  }
+  .hb-ov-kosten {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+  }
+  .hb-ov-extra {
+    grid-column: auto;
+  }
+  .hb-ov-rij {
+    font-size: 13px;
+  }
+  .hb-ov-bedrag {
+    font-size: 12px;
+  }
+  .hb-ov-weken {
+    max-width: 640px;
+  }
 }
 
 /* ---------- instellingen ---------- */
@@ -1006,6 +1233,7 @@ select.hb-veld {
   }
   .hb-tab {
     font-size: 11px;
+    padding: 4px 1px;
   }
   :root {
     --kolom: 80px;
