@@ -123,7 +123,14 @@ export function Overzicht() {
           {kosten("vast", "Vaste lasten")}
           {kosten("persoonlijk", "Abonnementen & termijnen")}
           <section className="hb-ov-kolom hb-ov-extra">
-            <h3>Extra</h3>
+            <h3 className="hb-ov-kop-over">
+              <span>
+                Extra<span className="hb-verborgen">, nog over:</span>
+              </span>
+              <span className={overzicht.extra.over < 0 ? "hb-ov-bedrag hb-rood" : "hb-ov-bedrag"}>
+                {formatEuro(overzicht.extra.over)}
+              </span>
+            </h3>
             <ul className="hb-ov-lijst">
               {extra.length === 0 && <li className="hb-ov-leeg">Geen extra's deze periode.</li>}
               {extra.map((u) => (

@@ -149,8 +149,8 @@ vaste lasten.
 - `VasteLast` is de **standaardlijst**. `PeriodeRegel` is de **snapshot** van
   een vaste last in één periode: eigen `bedrag`, `betaald` en `termijnNr`.
 - **De V (betaald):** tik op het vakje bij een vaste last en er verschijnt een
-  schuine V-stempel; de regel wordt grijs. In de kop staat "13 van 29 betaald ·
-  nog € … te gaan".
+  schuine V-stempel; de regel wordt grijs. Hoeveel er nog openstaat, staat op
+  Overzicht ("Nog te betalen").
 - Het bedrag van een regel is per periode aan te passen; het standaardbedrag
   blijft staan. Op het scherm Vaste lasten is het bedrag gewone tekst: een tik
   op de rij (niet op het vakje) opent het bewerkvenster (`PostFormulier`) met
@@ -184,6 +184,16 @@ vaste lasten.
   Namen worden vergeleken zonder verschil in hoofdletters en zonder spaties aan
   begin of eind. Dezelfde naam in een andere pot blijft een aparte regel. De
   volgorde is die van de eerste uitgave. Extra staat niet in de week.
+- **Invoeren** gaat met `ui/UitgaveInvoer.tsx`, op Vandaag, in een open week
+  op Weken en op Extra. Het formulier is **standaard ingeklapt** achter de knop
+  "+ Uitgave" over de volle breedte: geen veld krijgt vanzelf focus, dus het
+  toetsenbord komt niet omhoog bij het openen van de app. Een tik op de knop
+  klapt het formulier open met de focus op het bedrag en schuift het boven het
+  toetsenbord. Na "Zet erbij" blijft het open en leeg, met de focus weer op
+  het bedrag. "Klaar" in de kop klapt het in; dat gebeurt ook vanzelf bij een
+  andere tab, week of periode (het onderdeel wordt dan opnieuw opgebouwd), en
+  wat half was ingevuld is dan weg. Het bewerkvenster van een bestaande uitgave
+  gebruikt `UitgaveFormulier` rechtstreeks en is altijd open.
 - Snelknoppen: de 6 vaakst gebruikte omschrijvingen (`topWinkels`), aangevuld
   met de geïmporteerde winkels. Het scherm Extra heeft een eigen lijst.
 
@@ -233,7 +243,10 @@ periodes werkt zoals overal. Vier delen: de kerncijfers; per pot het
 percentage, het budget (salaris × percentage) en wat er over is (dezelfde
 bedragen als de potten op Vandaag); alle kosten ("Nog te betalen: € X (n
 posten)", de lijsten Vaste lasten en Abonnementen & termijnen met een kleine V
-bij afgevinkte posten, en Extra met de datum); en alle weken opengeklapt
+bij afgevinkte posten, en Extra met de datum en in de kop, rechts, wat er nog
+over is in de pot Extra: `overzicht.extra.over`, hetzelfde bedrag als bij
+"Per pot", rood als het negatief is; de andere twee koppen hebben geen
+bedrag); en alle weken opengeklapt
 (`WeekBlok` met `alleenLezen`: geen knoppen, geen formulier, samengevoegde
 regels klappen niet uit). Op een telefoon staan de twee lijsten naast elkaar
 met Extra eronder; vanaf 900px staan ze alle drie naast elkaar en is de pagina
@@ -267,10 +280,11 @@ src/
   ui/       schermen en onderdelen
     context.ts          useBoek, useStaat, useBeeld, useWinkels
     WeekBlok.tsx        weekblok, uitgaven in kolommen; UitgavenLijst (scherm Extra)
+    UitgaveInvoer.tsx   knop "+ Uitgave" met het inklapbare formulier
     UitgaveFormulier.tsx, Potten.tsx, Blad.tsx (dialoog), Inloggen.tsx
     NieuwePeriode.tsx, SaldoBlad.tsx, SaldoVeld.tsx
     schermen/           Vandaag, Weken, Overzicht, VasteLasten, Extra, Instellingen
-  App.tsx   schil: sessie, kop met periode/saldo/status, tabs, meldingen
+  App.tsx   schil: sessie, kop met periode en saldo, tabs, meldingen
   stijl.css alle stijl, klassen met voorvoegsel hb-
 ```
 
@@ -485,7 +499,9 @@ Papier en inkt: een rustig kasboek, geen dashboard. Alle stijl staat in
   bekend salaris en bedrag aan vaste lasten, wat er van Extra over is, het
   saldo en de kerncijfers (Total, Uitgave, Rest, Wrk rest). Laat deze tests staan; voeg geen andere echte bedragen toe.
 - Er zijn geen component- of end-to-end-tests. Schermen controleer je met de
-  hand in demo-modus op 360px.
+  hand in demo-modus op 360px. Voor de invoer: Vandaag openen (geen veld heeft
+  focus, geen bedragveld in beeld) → tik op "+ Uitgave" → de focus staat op het
+  bedrag; na "Zet erbij" weer; "Klaar" of een andere tab klapt het in.
 
 ## Geschiedenis van keuzes
 
@@ -574,6 +590,24 @@ Papier en inkt: een rustig kasboek, geen dashboard. Alle stijl staat in
   hetzelfde uitzien als op Weken.
 - **Alleen het Overzicht wordt breed op een groot scherm**; de invoerschermen
   blijven een smalle kolom.
+
+### Vierde ronde (invoer inklapbaar, rustiger kop)
+
+- **Invoerformulier standaard ingeklapt achter "+ Uitgave"**: Vandaag opende
+  met de focus op het bedrag, waardoor op de telefoon meteen het toetsenbord
+  omhoog kwam, ook als de gebruiker alleen wilde kijken. Eén onderdeel
+  (`UitgaveInvoer`) voor Vandaag, Weken en Extra.
+- **Openen met `flushSync`**: het formulier staat er dan nog binnen de tik,
+  zodat iOS de focus toestaat en het toetsenbord toont.
+- **Inklappen bij tab-, week- of periodewissel volgt uit het opnieuw opbouwen
+  van het scherm**; de open/dicht-stand staat bewust niet in de store.
+- **"Klaar" als tekstknop in plaats van "×"**: een "×" leest als weggooien.
+- **Bedrag in de kop van Extra op Overzicht**: wat er in Extra over is, is wat
+  de gebruiker spaart. Alleen daar; bij de andere twee lijsten past het niet
+  en zegt het minder.
+- **Regel "X van Y betaald · nog € Z te gaan" uit de kop**: de kop is nu
+  alleen de periode en het saldo. `overzicht.status` blijft bestaan voor "Nog
+  te betalen" op Overzicht.
 
 ## Bekende beperkingen
 
