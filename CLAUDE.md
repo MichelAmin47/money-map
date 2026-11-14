@@ -70,7 +70,8 @@ Een periode loopt **van salaris tot salaris**, niet per kalendermaand.
   dag vóór het volgende salaris), en een **snapshot** van `salaris`,
   `verdeling`, `weekStartDag`, plus `startsaldo`.
 - Starten gaat met "Nieuwe periode starten" (`ui/NieuwePeriode.tsx` →
-  `Boek.startPeriode`). De gebruiker kiest de startdatum (standaard vandaag),
+  `Boek.startPeriode`). De knop staat **alleen in Instellingen**; Vandaag
+  verwijst er alleen met een link naar (welkomstscherm en "periode voorbij"). De gebruiker kiest de startdatum (standaard vandaag),
   de verwachte volgende salarisdatum (standaard één maand later, `plusMaand`)
   en het startsaldo.
 - Komt het salaris eerder dan verwacht, dan wordt de vorige periode ingekort
@@ -131,9 +132,12 @@ vaste lasten.
   `WeekStand`: `basis` (weekbedrag), `doorgeschoven`, `beschikbaar`
   (basis + doorgeschoven), `uitgegeven`, `over` (schuift door) en `eigenOver`
   (basis − uitgegeven, zonder doorschuiven).
-- Een **ingeklapte weekrij** toont `eigenOver`; een **opengeklapte week** toont
-  de hele uitsplitsing (Weekbedrag, Doorgeschoven, Beschikbaar, Uitgegeven, Nog
-  over).
+- De **kop van een week** toont `eigenOver`, ingeklapt en opengeklapt. Een
+  **opengeklapte week** heeft de kolomnamen boven die bedragen en, als er iets
+  is doorgeschoven, één kleine regel eronder: per kolom `doorgeschoven`
+  ("+ € 45,00" of "− € 12,00", `formatMetTeken`) met daaronder `over` ("samen
+  over"). Een kolom met €0 doorgeschoven blijft leeg; zijn beide €0, dan staat
+  de regel er niet. Daaronder staan de uitgaven.
 - Uitgaven uit de pot **Extra tellen niet mee** in de weekbedragen.
   Extra = salaris × percentage − alle extra-uitgaven van de periode.
 - `berekenOverzicht(periode, regels, uitgaven)` in `overzicht.ts` leidt alle
@@ -148,7 +152,11 @@ vaste lasten.
   schuine V-stempel; de regel wordt grijs. In de kop staat "13 van 29 betaald ·
   nog € … te gaan".
 - Het bedrag van een regel is per periode aan te passen; het standaardbedrag
-  blijft staan. Wijzig je het standaardbedrag, dan volgt de lopende periode
+  blijft staan. Op het scherm Vaste lasten is het bedrag gewone tekst: een tik
+  op de rij (niet op het vakje) opent het bewerkvenster (`PostFormulier`) met
+  bovenaan "Bedrag deze periode" en, in de lopende periode, daaronder de post
+  zelf (naam, standaardbedrag, pot, termijnen, verwijderen). In een ontgrendelde
+  eerdere periode staat er alleen het periodebedrag. Wijzig je het standaardbedrag, dan volgt de lopende periode
   alleen als het bedrag daar niet al afweek (`Boek.wijzigVasteLast`).
 - **Termijnen:** `termijnHuidig` / `termijnTotaal`, getoond als
   "Naam · 3/8" (`termijnLabel`). Bij een nieuwe periode (`bouwNieuwePeriode`)
@@ -201,6 +209,36 @@ saldo = startsaldo + salaris − (vaste lasten met een V + alle uitgaven in de p
 - Het numerieke toetsenbord van iOS heeft geen minteken; daarom heeft het
   saldoveld een schakelaar "Onder nul" (`ui/SaldoVeld.tsx`, `parseSaldo`).
 
+### Kerncijfers (`overzicht.ts`, `berekenKerncijfers`)
+
+De cijfers bovenaan de tab Overzicht, met de namen uit de sheet. Ze zitten ook
+in `berekenOverzicht` (`overzicht.kern`).
+
+| Label | Formule |
+| --- | --- |
+| Salaris | salaris uit de snapshot van de periode |
+| Saldo | het saldo hierboven (`overzicht.saldo.saldo`) |
+| Total | alle vaste lasten van de periode (met of zonder V) + alle uitgaven |
+| Uitgave | vaste lasten met een V + alle uitgaven |
+| Rest | salaris − Total |
+| Wrk rest | salaris − Uitgave |
+
+Uitgaven tellen uit alle drie de potten; ontvangen geld is negatief en telt
+vanzelf mee. Het startsaldo doet niet mee: Saldo = Wrk rest + startsaldo.
+
+### Tab Overzicht (`ui/schermen/Overzicht.tsx`)
+
+Het hele plaatje van de periode in beeld, **alleen-lezen**; bladeren tussen
+periodes werkt zoals overal. Vier delen: de kerncijfers; per pot het
+percentage, het budget (salaris × percentage) en wat er over is (dezelfde
+bedragen als de potten op Vandaag); alle kosten ("Nog te betalen: € X (n
+posten)", de lijsten Vaste lasten en Abonnementen & termijnen met een kleine V
+bij afgevinkte posten, en Extra met de datum); en alle weken opengeklapt
+(`WeekBlok` met `alleenLezen`: geen knoppen, geen formulier, samengevoegde
+regels klappen niet uit). Op een telefoon staan de twee lijsten naast elkaar
+met Extra eronder; vanaf 900px staan ze alle drie naast elkaar en is de pagina
+breder (`hb-root-breed`, alleen op deze tab).
+
 ## Architectuur
 
 Vite + React 19 + TypeScript (strict, `noUncheckedIndexedAccess`), als PWA
@@ -210,12 +248,13 @@ geen state-bibliotheek, geen CSS-framework.
 ```
 src/
   logica/   pure rekenlogica + tests
-    geld.ts        centen, formatEuro, formatInvoer, parseBedrag, parseSaldo
+    geld.ts        centen, formatEuro, formatMetTeken, formatInvoer, parseBedrag, parseSaldo
     datum.ts       ISO-datums ("2026-11-13"), rekenen in UTC, formatKort/formatMetDag
     potten.ts      verdeling, weekpot, verdeelOverWeken, schuifDoor
     weken.ts       weekblokken, weekIndexVoorDatum
     termijnen.ts   VasteLast, PeriodeRegel, bouwNieuwePeriode, termijnLabel
-    overzicht.ts   Periode, Uitgave, berekenOverzicht, berekenSaldo, topWinkels
+    overzicht.ts   Periode, Uitgave, berekenOverzicht, berekenSaldo,
+                   berekenKerncijfers, topWinkels
     groepen.ts     groepeerUitgaven (samenvoegen in een week)
     startdata.ts   import-/exportformaat, leesStartdata (validatie)
   data/     opslag en toestand
@@ -230,7 +269,7 @@ src/
     WeekBlok.tsx        weekblok, uitgaven in kolommen; UitgavenLijst (scherm Extra)
     UitgaveFormulier.tsx, Potten.tsx, Blad.tsx (dialoog), Inloggen.tsx
     NieuwePeriode.tsx, SaldoBlad.tsx, SaldoVeld.tsx
-    schermen/           Vandaag, Weken, VasteLasten, Extra, Instellingen
+    schermen/           Vandaag, Weken, Overzicht, VasteLasten, Extra, Instellingen
   App.tsx   schil: sessie, kop met periode/saldo/status, tabs, meldingen
   stijl.css alle stijl, klassen met voorvoegsel hb-
 ```
@@ -263,7 +302,9 @@ src/
   `isLopende` en `bewerkbaar`. Schermen lezen daaruit en roepen acties op
   `useBoek()` aan.
 - **Tabs via de hash** (`#/weken`), zodat verversen op GitHub Pages geen 404
-  geeft.
+  geeft. Er zijn zes tabs: Vandaag, Weken, Overzicht, Vaste lasten, Extra en
+  Instellingen. Die laatste heet in de tabbalk "Instellen" (met het volledige
+  woord als `aria-label`), zodat alle zes op 360px passen.
 - **Invoervelden voor bedragen** houden een string bij en parsen pas bij
   opslaan of blur, zodat "12," te typen is.
 
@@ -426,18 +467,23 @@ Papier en inkt: een rustig kasboek, geen dashboard. Alle stijl staat in
   uitgavenlijst gebruiken hem alle drie, zodat de bedragen recht onder elkaar
   staan.
 - Negatief is rood (`hb-rood`), ontvangen is groen (`hb-groen`).
+- **Vaste lasten:** een rij is 44px hoog (`hb-post`). Het vakje is 22px, in een
+  tikvlak van 44×44px (`hb-stempel`).
+- **Overzicht** (`hb-ov-…`) is een leesscherm: tekst van 11–13px, namen worden
+  afgekort met "…", bedragen blijven heel en rechts uitgelijnd.
 
 ## Tests
 
 - `src/logica/logica.test.ts`: bedragen, potten, weekpot, doorschuiven,
   weekindeling, termijnen, overzicht, snelknoppen, import.
-- `src/logica/saldo.test.ts`, `src/logica/groepen.test.ts`.
+- `src/logica/saldo.test.ts`, `src/logica/groepen.test.ts`,
+  `src/logica/kerncijfers.test.ts`.
 - `src/data/boek.test.ts`: de store met een nep-backend (import, periodes,
   termijnen, optimistisch opslaan, startsaldo, export).
 - `src/data/backends.test.ts`: het omzetten van periodes in beide backends.
 - Controlegetallen uit de sheet die als test vastliggen: de weekpot bij een
-  bekend salaris en bedrag aan vaste lasten, wat er van Extra over is, en het
-  saldo. Laat deze tests staan; voeg geen andere echte bedragen toe.
+  bekend salaris en bedrag aan vaste lasten, wat er van Extra over is, het
+  saldo en de kerncijfers (Total, Uitgave, Rest, Wrk rest). Laat deze tests staan; voeg geen andere echte bedragen toe.
 - Er zijn geen component- of end-to-end-tests. Schermen controleer je met de
   hand in demo-modus op 360px.
 
@@ -498,6 +544,35 @@ Papier en inkt: een rustig kasboek, geen dashboard. Alle stijl staat in
   vandaan komt.
 - **Schakelaar "Onder nul"** bij het saldoveld, omdat het numerieke toetsenbord
   van iOS geen minteken heeft.
+
+### Derde ronde (rustiger schermen en de tab Overzicht)
+
+- **"Nieuwe periode starten" alleen nog in Instellingen**: op Vandaag werd de
+  knop per ongeluk aangetikt. Het welkomstscherm en de melding "periode
+  voorbij" verwijzen met een link naar Instellingen.
+- **Het blok met vijf regels is uit de opengeklapte week**: de kop toont al wat
+  er over is. Wat overblijft is de doorgeschoven-regel, alleen als die niet €0
+  is. Per kolom past "+ € 45,00 doorgeschoven · samen € 112,34 over" niet in
+  80px; daarom staan de woorden één keer links en de twee bedragen per kolom
+  onder elkaar.
+- **Kolomnamen boven de bedragen in de kop van een open week**; de lijst op
+  Weken houdt daarnaast zijn ene kopregel voor de ingeklapte weken.
+- **Bedrag van een vaste last is tekst, bewerken gaat in een venster**: geen
+  dubbele lijn meer en geen bedrag dat per ongeluk wijzigt. Eén venster voor
+  het periodebedrag én de post zelf, in plaats van een tik op de naam voor het
+  een en een invoerveld voor het ander. `wijzigVasteLast` wordt alleen
+  aangeroepen als er aan de post iets veranderd is, zodat een afwijkend
+  periodebedrag blijft afwijken.
+- **Namen van vaste lasten op één regel** (afgekort met "…"), zodat elke rij
+  44px blijft.
+- **Kerncijfers in `src/logica`** (`berekenKerncijfers`), met de
+  controlegetallen uit de sheet als test.
+- **Overzicht direct na Weken in de tabbalk**, en "Instellen" als kort label:
+  zes tabs van 60px op 360px, zonder scrollen of verborgen tabs.
+- **Overzicht hergebruikt `WeekBlok`** met `alleenLezen`, zodat de weken er
+  hetzelfde uitzien als op Weken.
+- **Alleen het Overzicht wordt breed op een groot scherm**; de invoerschermen
+  blijven een smalle kolom.
 
 ## Bekende beperkingen
 

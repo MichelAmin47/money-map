@@ -5,7 +5,7 @@ import { Potten } from "../Potten";
 import { UitgaveFormulier } from "../UitgaveFormulier";
 import { WeekBlok } from "../WeekBlok";
 
-export function Vandaag({ onNieuwePeriode }: { onNieuwePeriode: () => void }) {
+export function Vandaag() {
   const { periode, overzicht, isLopende, bewerkbaar } = useBeeld();
 
   if (!periode || !overzicht) {
@@ -21,11 +21,11 @@ export function Vandaag({ onNieuwePeriode }: { onNieuwePeriode: () => void }) {
           <li>
             Controleer je <a href="#/vast">vaste lasten</a>.
           </li>
-          <li>Start je eerste periode op de dag dat je salaris binnenkwam.</li>
+          <li>
+            Start bij <a href="#/instellingen">Instellingen</a> je eerste periode, op de dag dat je
+            salaris binnenkwam.
+          </li>
         </ol>
-        <button className="hb-knop hb-knop-hoofd hb-breed" onClick={onNieuwePeriode}>
-          Nieuwe periode starten
-        </button>
       </div>
     );
   }
@@ -41,10 +41,10 @@ export function Vandaag({ onNieuwePeriode }: { onNieuwePeriode: () => void }) {
 
       {voorbij && (
         <div className="hb-melding">
-          <p>Deze periode is voorbij. Salaris binnen?</p>
-          <button className="hb-knop hb-knop-hoofd" onClick={onNieuwePeriode}>
-            Nieuwe periode starten
-          </button>
+          <p>
+            Deze periode is voorbij. Salaris binnen? Start de nieuwe periode bij{" "}
+            <a href="#/instellingen">Instellingen</a>.
+          </p>
         </div>
       )}
 
@@ -61,12 +61,6 @@ export function Vandaag({ onNieuwePeriode }: { onNieuwePeriode: () => void }) {
         <p className="hb-hint">
           Dit is een eerdere periode. Bij <a href="#/weken">Weken</a> staan alle uitgaven.
         </p>
-      )}
-
-      {isLopende && !voorbij && (
-        <button className="hb-knop hb-knop-rustig hb-breed hb-ruimte" onClick={onNieuwePeriode}>
-          Nieuwe periode starten…
-        </button>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { formatKort, formatMetDag } from "../logica/datum";
-import { formatEuro } from "../logica/geld";
+import { formatEuro, formatMetTeken } from "../logica/geld";
 import { groepeerUitgaven } from "../logica/groepen";
 import type { Uitgave, WeekOverzicht } from "../logica/overzicht";
 import type { WeekPot } from "../logica/potten";
@@ -8,8 +8,6 @@ import { Blad } from "./Blad";
 import { UitgaveFormulier } from "./UitgaveFormulier";
 
 const POTNAAM = { vast: "Vaste lasten", persoonlijk: "Persoonlijk", extra: "Extra" } as const;
-
-const metTeken = (c: number) => (c > 0 ? `+${formatEuro(c)}` : formatEuro(c));
 
 /** Lijst met uitgaven (scherm Extra); tik op een regel om hem te bewerken. */
 export function UitgavenLijst({
@@ -78,7 +76,15 @@ export function UitgavenLijst({
  * Uitgaven met dezelfde naam in dezelfde pot staan op één regel; tik erop om
  * de losse uitgaven te zien. De pot Extra staat hier niet (zie scherm Extra).
  */
-function WeekUitgaven({ uitgaven, bewerkbaar }: { uitgaven: Uitgave[]; bewerkbaar: boolean }) {
+function WeekUitgaven({
+  uitgaven,
+  bewerkbaar,
+  alleenLezen,
+}: {
+  uitgaven: Uitgave[];
+  bewerkbaar: boolean;
+  alleenLezen: boolean;
+}) {
   const groepen = useMemo(() => groepeerUitgaven(uitgaven), [uitgaven]);
   const [open, setOpen] = useState<string[]>([]);
   const [bewerk, setBewerk] = useState<Uitgave | null>(null);
@@ -145,6 +151,29 @@ function WeekUitgaven({ uitgaven, bewerkbaar }: { uitgaven: Uitgave[]; bewerkbaa
           }
           const laatste = g.uitgaven.at(-1)!;
           const isOpen = open.includes(g.sleutel);
+          const groep = (
+            <>
+              <span className="hb-urij-naam">
+                <span className="hb-urij-titel">
+                  <span className="hb-urij-tekst">{g.naam}</span>
+                  <span className="hb-urij-aantal">({g.uitgaven.length}×)</span>
+                </span>
+                <small>
+                  {eerste.datum === laatste.datum
+                    ? formatMetDag(eerste.datum)
+                    : `${formatKort(eerste.datum)} – ${formatKort(laatste.datum)}`}
+                </small>
+              </span>
+              {kolommen(g.pot, g.totaal)}
+            </>
+          );
+          if (alleenLezen) {
+            return (
+              <li key={g.sleutel}>
+                <div className="hb-urij">{groep}</div>
+              </li>
+            );
+          }
           return (
             <li key={g.sleutel}>
               <button
@@ -154,18 +183,7 @@ function WeekUitgaven({ uitgaven, bewerkbaar }: { uitgaven: Uitgave[]; bewerkbaa
                   setOpen(isOpen ? open.filter((k) => k !== g.sleutel) : [...open, g.sleutel])
                 }
               >
-                <span className="hb-urij-naam">
-                  <span className="hb-urij-titel">
-                    <span className="hb-urij-tekst">{g.naam}</span>
-                    <span className="hb-urij-aantal">({g.uitgaven.length}×)</span>
-                  </span>
-                  <small>
-                    {eerste.datum === laatste.datum
-                      ? formatMetDag(eerste.datum)
-                      : `${formatKort(eerste.datum)} – ${formatKort(laatste.datum)}`}
-                  </small>
-                </span>
-                {kolommen(g.pot, g.totaal)}
+                {groep}
               </button>
               {isOpen && (
                 <ul className="hb-sublijst">
@@ -195,8 +213,44 @@ function WeekUitgaven({ uitgaven, bewerkbaar }: { uitgaven: Uitgave[]; bewerkbaa
 }
 
 /**
+ * Wat er uit de vorige week is doorgeschoven, per kolom recht onder de
+ * bedragen in de kop, met eronder wat er samen met het eigen weekbedrag over
+ * is. Een kolom zonder doorgeschoven bedrag blijft leeg; zijn beide €0, dan
+ * staat de regel er niet.
+ */
+function Doorgeschoven({ week }: { week: WeekOverzicht }) {
+  const { vast, persoonlijk } = week;
+  if (vast.doorgeschoven === 0 && persoonlijk.doorgeschoven === 0) return null;
+  const cel = (stand: WeekOverzicht["vast"], naam: string) =>
+    stand.doorgeschoven === 0 ? (
+      <span />
+    ) : (
+      <span
+        className="hb-door-cel"
+        aria-label={`${naam}: ${formatMetTeken(stand.doorgeschoven)} doorgeschoven, samen ${formatEuro(stand.over)} over`}
+      >
+        <span className={stand.doorgeschoven < 0 ? "hb-rood" : ""}>
+          {formatMetTeken(stand.doorgeschoven)}
+        </span>
+        <span className={stand.over < 0 ? "hb-rood" : ""}>{formatEuro(stand.over)}</span>
+      </span>
+    );
+  return (
+    <div className="hb-door">
+      <span className="hb-door-label" aria-hidden="true">
+        <span>doorgeschoven</span>
+        <span>samen over</span>
+      </span>
+      {cel(vast, "Vaste lasten")}
+      {cel(persoonlijk, "Persoonlijk")}
+    </div>
+  );
+}
+
+/**
  * Eén weekblok. De kop toont per pot wat de week van haar eigen weekbedrag
- * over heeft (zonder doorschuiven); opengeklapt staat de hele uitsplitsing.
+ * over heeft (zonder doorschuiven). Opengeklapt staan de kolomnamen boven die
+ * bedragen, met eronder de doorgeschoven-regel en de uitgaven.
  */
 export function WeekBlok({
   week,
@@ -204,14 +258,17 @@ export function WeekBlok({
   onToggle,
   isNu,
   bewerkbaar,
+  alleenLezen = false,
   children,
 }: {
   week: WeekOverzicht;
   open: boolean;
-  /** Zonder onToggle staat het blok altijd open (scherm Vandaag). */
+  /** Zonder onToggle staat het blok altijd open (Vandaag en Overzicht). */
   onToggle?: () => void;
   isNu: boolean;
   bewerkbaar: boolean;
+  /** Scherm Overzicht: niets is aan te tikken. */
+  alleenLezen?: boolean;
   children?: ReactNode;
 }) {
   const { blok, vast, persoonlijk } = week;
@@ -223,6 +280,12 @@ export function WeekBlok({
         {isNu && <span className="hb-nu">deze week</span>}
       </span>
       <span className="hb-week-cijfers">
+        {open && (
+          <>
+            <span className="hb-week-kolomnaam">Vaste lasten</span>
+            <span className="hb-week-kolomnaam">Persoonlijk</span>
+          </>
+        )}
         <span className={vast.eigenOver < 0 ? "hb-rood" : ""}>{formatEuro(vast.eigenOver)}</span>
         <span className={persoonlijk.eigenOver < 0 ? "hb-rood" : ""}>
           {formatEuro(persoonlijk.eigenOver)}
@@ -230,16 +293,12 @@ export function WeekBlok({
       </span>
     </>
   );
-  const rij = (label: string, a: number, b: number, opties: { teken?: boolean; sterk?: boolean } = {}) => (
-    <tr className={opties.sterk ? "hb-sterk" : undefined}>
-      <th scope="row">{label}</th>
-      <td className={a < 0 ? "hb-rood" : ""}>{opties.teken ? metTeken(a) : formatEuro(a)}</td>
-      <td className={b < 0 ? "hb-rood" : ""}>{opties.teken ? metTeken(b) : formatEuro(b)}</td>
-    </tr>
-  );
 
+  const klassen = ["hb-week", open && "hb-week-open", alleenLezen && "hb-week-lees"]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <section className={open ? "hb-week hb-week-open" : "hb-week"}>
+    <section className={klassen}>
       {onToggle ? (
         <button className="hb-week-kop" onClick={onToggle} aria-expanded={open}>
           {kop}
@@ -249,23 +308,12 @@ export function WeekBlok({
       )}
       {open && (
         <div className="hb-week-body">
-          <table className="hb-weektabel">
-            <thead>
-              <tr>
-                <td />
-                <th scope="col">Vaste lasten</th>
-                <th scope="col">Persoonlijk</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rij("Weekbedrag", vast.basis, persoonlijk.basis)}
-              {rij("Doorgeschoven", vast.doorgeschoven, persoonlijk.doorgeschoven, { teken: true })}
-              {rij("Beschikbaar", vast.beschikbaar, persoonlijk.beschikbaar, { sterk: true })}
-              {rij("Uitgegeven", vast.uitgegeven, persoonlijk.uitgegeven)}
-              {rij("Nog over", vast.over, persoonlijk.over, { sterk: true })}
-            </tbody>
-          </table>
-          <WeekUitgaven uitgaven={week.uitgaven} bewerkbaar={bewerkbaar} />
+          <Doorgeschoven week={week} />
+          <WeekUitgaven
+            uitgaven={week.uitgaven}
+            bewerkbaar={bewerkbaar && !alleenLezen}
+            alleenLezen={alleenLezen}
+          />
           {children}
         </div>
       )}

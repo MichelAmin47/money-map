@@ -71,7 +71,7 @@ De workflow zet `base` automatisch op de naam van de repo. Lokaal staat die in
 3. *Instellingen → Importeer startdata (JSON)* en kies je `startdata.json`
    (formaat: zie BRIEF.md). Twee keer importeren geeft geen dubbelen: posten
    met dezelfde naam en pot worden bijgewerkt.
-4. Start je eerste periode met **Nieuwe periode starten** (startdatum = de dag
+4. Start je eerste periode bij *Instellingen → Nieuwe periode starten* (startdatum = de dag
    dat je salaris binnenkwam).
 
 `startdata.json` staat in `.gitignore`; commit het echte bestand niet.

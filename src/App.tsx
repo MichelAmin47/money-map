@@ -13,6 +13,7 @@ import { NieuwePeriode } from "./ui/NieuwePeriode";
 import { SaldoBlad } from "./ui/SaldoBlad";
 import { Extra } from "./ui/schermen/Extra";
 import { Instellingen } from "./ui/schermen/Instellingen";
+import { Overzicht } from "./ui/schermen/Overzicht";
 import { Vandaag } from "./ui/schermen/Vandaag";
 import { VasteLasten } from "./ui/schermen/VasteLasten";
 import { Weken } from "./ui/schermen/Weken";
@@ -20,9 +21,11 @@ import { Weken } from "./ui/schermen/Weken";
 const TABS = [
   ["vandaag", "Vandaag"],
   ["weken", "Weken"],
+  ["overzicht", "Overzicht"],
   ["vast", "Vaste lasten"],
   ["extra", "Extra"],
-  ["instellingen", "Instellingen"],
+  // Kort label: met zes tabs past "Instellingen" niet op 360px.
+  ["instellingen", "Instellen", "Instellingen"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
 
@@ -174,7 +177,7 @@ function Schil({ onUitloggen }: { onUitloggen?: () => void }) {
   const openNieuwePeriode = () => setNieuwePeriode(true);
 
   return (
-    <div className="hb-root">
+    <div className={tab === "overzicht" ? "hb-root hb-root-breed" : "hb-root"}>
       <header className="hb-top">
         <div className="hb-periodenav">
           <button
@@ -288,8 +291,9 @@ function Schil({ onUitloggen }: { onUitloggen?: () => void }) {
           <div className="hb-laden">Periode ophalen…</div>
         ) : (
           <>
-            {tab === "vandaag" && <Vandaag onNieuwePeriode={openNieuwePeriode} />}
+            {tab === "vandaag" && <Vandaag />}
             {tab === "weken" && <Weken />}
+            {tab === "overzicht" && <Overzicht />}
             {tab === "vast" && <VasteLasten />}
             {tab === "extra" && <Extra />}
             {tab === "instellingen" && (
@@ -304,12 +308,13 @@ function Schil({ onUitloggen }: { onUitloggen?: () => void }) {
       </main>
 
       <nav className="hb-tabs" aria-label="Schermen">
-        {TABS.map(([k, l]) => (
+        {TABS.map(([k, l, voluit]) => (
           <a
             key={k}
             href={`#/${k}`}
             className={tab === k ? "hb-tab hb-tab-aan" : "hb-tab"}
             aria-current={tab === k ? "page" : undefined}
+            aria-label={voluit}
           >
             {l}
           </a>

@@ -87,6 +87,41 @@ export function berekenSaldo(
   };
 }
 
+/** De kerncijfers van het scherm Overzicht, met de namen uit de sheet. */
+export interface Kerncijfers {
+  salaris: Centen;
+  /** Alle vaste lasten van de periode (met of zonder V) + alle uitgaven. */
+  total: Centen;
+  /** Vaste lasten met een V + alle uitgaven: wat er echt van de rekening is. */
+  uitgave: Centen;
+  /** salaris − total: wat er overblijft als alles betaald is. */
+  rest: Centen;
+  /** salaris − uitgave: de "werkelijke rest" op dit moment. */
+  wrkRest: Centen;
+}
+
+/**
+ * De kerncijfers zoals ze in de sheet stonden. Uitgaven tellen uit alle drie
+ * de potten; ontvangen geld is een negatief bedrag en telt dus vanzelf mee.
+ * Het startsaldo doet hier niet mee (dat zit alleen in het saldo).
+ */
+export function berekenKerncijfers(
+  periode: Pick<Periode, "salaris">,
+  regels: Pick<PeriodeRegel, "bedrag" | "betaald">[],
+  uitgaven: Pick<Uitgave, "bedrag">[],
+): Kerncijfers {
+  const uit = som(uitgaven.map((u) => u.bedrag));
+  const total = som(regels.map((r) => r.bedrag)) + uit;
+  const uitgave = som(regels.filter((r) => r.betaald).map((r) => r.bedrag)) + uit;
+  return {
+    salaris: periode.salaris,
+    total,
+    uitgave,
+    rest: periode.salaris - total,
+    wrkRest: periode.salaris - uitgave,
+  };
+}
+
 export interface Overzicht {
   vast: PotOverzicht;
   persoonlijk: PotOverzicht;
@@ -94,6 +129,7 @@ export interface Overzicht {
   weken: WeekOverzicht[];
   status: { betaald: number; totaal: number; openstaand: Centen };
   saldo: SaldoOverzicht;
+  kern: Kerncijfers;
 }
 
 /** Alle cijfers van één periode, afgeleid uit de ruwe gegevens. */
@@ -154,6 +190,7 @@ export function berekenOverzicht(
       openstaand: som(regels.filter((r) => !r.betaald).map((r) => r.bedrag)),
     },
     saldo: berekenSaldo(periode, regels, uitgaven),
+    kern: berekenKerncijfers(periode, regels, uitgaven),
   };
 }
 
