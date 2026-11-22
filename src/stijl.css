@@ -217,6 +217,40 @@ code {
   flex-wrap: wrap;
   gap: 8px;
 }
+/* Storing bij Supabase: rustig, geen alarmrood. */
+.hb-storing {
+  background: var(--papier-op);
+  border: 1px solid var(--lijn);
+  border-left: 3px solid var(--inkt);
+  padding: 12px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+.hb-storing p {
+  margin: 0 0 10px;
+}
+.hb-storing h2 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 26px;
+  margin: 0 0 8px;
+}
+.hb-storing-scherm {
+  margin-top: 24px;
+}
+.hb-storing-scherm .hb-knop {
+  width: 100%;
+}
+.hb-invoer-uit .hb-hint {
+  margin-top: 6px;
+}
+/* Een fieldset groepeert velden die samen uit kunnen (disabled), zonder eigen opmaak. */
+.hb-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
 .hb-veldfout {
   color: var(--rood);
   font-size: 14px;

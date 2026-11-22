@@ -1,5 +1,6 @@
 import { type ComponentProps, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { useStaat } from "./context";
 import { UitgaveFormulier } from "./UitgaveFormulier";
 
 type Props = Omit<ComponentProps<typeof UitgaveFormulier>, "bestaande" | "autoFocus" | "onKlaar">;
@@ -25,6 +26,7 @@ function brengInBeeld(el: HTMLElement) {
  * of de periode wisselt, omdat dit onderdeel dan opnieuw wordt opgebouwd.
  */
 export function UitgaveInvoer(props: Props) {
+  const { alleenLezen } = useStaat();
   const [open, setOpen] = useState(false);
   const vakRef = useRef<HTMLDivElement>(null);
   const knopRef = useRef<HTMLButtonElement>(null);
@@ -39,6 +41,18 @@ export function UitgaveInvoer(props: Props) {
     vv?.addEventListener("resize", schuif);
     return () => vv?.removeEventListener("resize", schuif);
   }, [open]);
+
+  if (alleenLezen) {
+    // Storing: de knop blijft staan, zichtbaar uit, met de reden erbij.
+    return (
+      <div className="hb-invoer-uit">
+        <button type="button" className="hb-knop hb-knop-hoofd hb-invoer-open" disabled>
+          + Uitgave
+        </button>
+        <p className="hb-hint">Geen verbinding: invoeren kan weer zodra Supabase reageert.</p>
+      </div>
+    );
+  }
 
   if (!open) {
     return (

@@ -55,7 +55,15 @@ npm run build                # typecheck + productie-build in dist/
 
 Demo-modus bewaart alles in `localStorage` onder de sleutel `hb-demo`. In de
 console zet `hbDemoMislukken(true)` het opslaan op "mislukt", om de foutmelding
-en "Opnieuw proberen" te zien. Zonder `.env.local` en zonder demo-modus toont
+en "Opnieuw proberen" te zien.
+
+**Storingsmodus in demo:** `?storing=1` in de url (bijvoorbeeld
+`http://localhost:5173/money-map/?storing=1`) laat elk verzoek van de
+demo-backend hangen, zodat na 10 seconden de time-out volgt; `?storing=fout`
+geeft meteen een netwerkfout. In de console zet `hbDemoStoring(false)` de
+storing uit (en `hbDemoStoring(true)` weer aan); daarna herstelt "Opnieuw
+proberen" de app. Zonder momentopname (`localStorage.removeItem("hb-momentopname")`)
+zie je het storingsscherm, met momentopname de alleen-lezen-weergave. Zonder `.env.local` en zonder demo-modus toont
 de app een scherm "nog niet gekoppeld".
 
 ## Domeinbegrippen en rekenregels
@@ -262,7 +270,7 @@ geen state-bibliotheek, geen CSS-framework.
 src/
   logica/   pure rekenlogica + tests
     geld.ts        centen, formatEuro, formatMetTeken, formatInvoer, parseBedrag, parseSaldo
-    datum.ts       ISO-datums ("2026-11-13"), rekenen in UTC, formatKort/formatMetDag
+    datum.ts       ISO-datums ("2026-11-13"), rekenen in UTC, formatKort/formatMetDag/formatMoment
     potten.ts      verdeling, weekpot, verdeelOverWeken, schuifDoor
     weken.ts       weekblokken, weekIndexVoorDatum
     termijnen.ts   VasteLast, PeriodeRegel, bouwNieuwePeriode, termijnLabel
@@ -273,10 +281,12 @@ src/
   data/     opslag en toestand
     backend.ts          de interface Backend
     supabaseBackend.ts  rijen ↔ domeinobjecten, euro ↔ centen
-    geheugenBackend.ts  demo-backend (localStorage)
+    geheugenBackend.ts  demo-backend (localStorage), met storingsmodus
     supabase.ts         client, DEMO-vlag
     boek.ts             de store: toestand + alle acties
     wachtrij.ts         opslag-wachtrij
+    tijdslimiet.ts      time-outs, isStoring, fetch die Auth-verzoeken afbreekt
+    momentopname.ts     laatst geladen gegevens in localStorage (bij een storing)
   ui/       schermen en onderdelen
     context.ts          useBoek, useStaat, useBeeld, useWinkels
     WeekBlok.tsx        weekblok, uitgaven in kolommen; UitgavenLijst (scherm Extra)
@@ -311,7 +321,8 @@ src/
   `online`-event wordt het vanzelf opnieuw geprobeerd. De rij staat alleen in
   het geheugen; bij sluiten met wachtende wijzigingen waarschuwt de browser.
 - **Laden:** `laad()` haalt de basis en de lopende periode op. Eerdere periodes
-  worden pas geladen als je ernaartoe bladert (`kiesPeriode`).
+  worden pas geladen als je ernaartoe bladert (`kiesPeriode`). Zie
+  "Storing bij Supabase" voor de time-out en de momentopname.
 - **`useBeeld()`** geeft de periode in beeld met `berekenOverzicht` erover, plus
   `isLopende` en `bewerkbaar`. Schermen lezen daaruit en roepen acties op
   `useBoek()` aan.
@@ -321,6 +332,100 @@ src/
   woord als `aria-label`), zodat alle zes op 360px passen.
 - **Invoervelden voor bedragen** houden een string bij en parsen pas bij
   opslaan of blur, zodat "12," te typen is.
+
+## Storing bij Supabase
+
+Als Supabase (vooral Auth) niet antwoordt, blijft de app bruikbaar om te kijken
+en blijft de login bewaard.
+
+**Time-outs** (`data/tijdslimiet.ts`, `TIJDSLIMIET_MS` = 10 seconden):
+
+- `metTijdslimiet(belofte, ms)`: wacht hooguit `ms`; daarna een
+  `TijdslimietFout`. Het verzoek zelf loopt door, de uitkomst wordt genegeerd.
+- `maakFetchMetTijdslimiet` zit als `global.fetch` in `createClient`
+  (`data/supabase.ts`) en breekt **alleen verzoeken naar `/auth/v1/`** na 10
+  seconden af (token verlengen, inloggen). Supabase ziet een afgebroken
+  verzoek als netwerkfout (`AuthRetryableFetchError`) en **houdt de login dan
+  vast**. Verzoeken naar de database (ook de import en de wachtrij) hebben
+  geen tijdslimiet.
+- `isStoring(e)`: time-out of netwerkfout ("Failed to fetch", "Load failed",
+  status 0), geen inhoudelijke fout zoals een fout wachtwoord.
+
+**Opstarten** (`App.tsx`, `MetSessie`): de app leest de user_id uit de login
+die Supabase in `localStorage` (`hb-sessie`) bewaart, zonder netwerk
+(`leesBewaardeGebruiker`). Is die er, dan start het `Boek` meteen; elk
+databaseverzoek wacht intern op het verlengen van het token, dus de
+tijdslimiet van `Boek.laad()` dekt sessie én basisdata. Is er geen leesbare
+login, dan vraagt de app `getSession()` met tijdslimiet. Alleen de gebeurtenis
+`SIGNED_OUT` logt uit; een lege `INITIAL_SESSION` (die Supabase bij een
+storing stuurt) wordt genegeerd. Een time-out of netwerkfout leidt nooit tot
+`signOut()`.
+
+**`Boek.laad()`** heeft een tijdslimiet. Gaat het mis door een storing, dan:
+
+- met een momentopname van deze gebruiker: de app toont die, **alleen lezen**
+  (`Staat.alleenLezen = { bewaardOp }`);
+- zonder momentopname: het storingsscherm "Supabase reageert niet. Je gegevens
+  zijn veilig; probeer het zo opnieuw." (`Staat.laadStoring`);
+- een andere fout (geen storing) geeft het gewone foutscherm.
+
+`laad({ stil: true })` probeert opnieuw zonder het scherm te wisselen
+(`opnieuwBezig`). Dat gebeurt na een tik op "Opnieuw proberen", **elke 30
+seconden** (`OPNIEUW_MS`), bij `visibilitychange` (de app komt weer in beeld)
+en bij `online`. Lukt het, dan komen de verse gegevens in beeld, verdwijnt de
+melding en kan er weer ingevoerd worden; de periode die in beeld was blijft in
+beeld. `laad()` doet niets zolang er wijzigingen in de wachtrij staan.
+
+**Momentopname** (`data/momentopname.ts`, sleutel `hb-momentopname`):
+`{ versie, gebruiker, bewaardOp, instellingen, vasteLasten, periodes, data }`,
+met alleen de periodes die geladen waren (altijd de lopende). Het `Boek`
+bewaart hem na elk geslaagd laden (ook van een eerdere periode) en elke keer
+dat de wachtrij leeg en zonder fout is, dus alleen als de toestand gelijk is
+aan die op de server. Een ander versienummer, een ander account of een
+beschadigde inhoud wordt gewist en niet gebruikt. Bij "Uitloggen" en bij
+`SIGNED_OUT` wordt hij gewist. Lukt `localStorage` niet, dan werkt de app
+zonder momentopname. Hij staat alleen op het toestel.
+
+**Alleen lezen:** bovenaan staat "Geen verbinding · gegevens van za 21 nov
+11:12" met "Opnieuw proberen". `useBeeld().bewerkbaar` is false en
+`useBeeld().alleenLezen` true: "+ Uitgave" staat zichtbaar uit met de reden
+eronder, de V en het bewerken van uitgaven en vaste lasten staan uit, "Post
+toevoegen" en "Toch bewerken" zijn weg, en in Instellingen staan de velden,
+"Nieuwe periode starten", import en export uit (het saldo bekijken en
+uitloggen werken). Daarnaast weigert elke actie van het `Boek`
+(`magSchrijven`), zodat er niets in de wachtrij komt. Bladeren kan alleen naar
+periodes die in de momentopname zitten.
+
+**Tijdens gebruik** verandert er niets: valt de verbinding weg terwijl de app
+open is, dan geeft de wachtrij "Opslaan lukte niet" met "Opnieuw proberen".
+
+**Inloggen** (`ui/Inloggen.tsx`): na 10 seconden, of bij een netwerkfout,
+staat er "Supabase reageert niet, probeer het zo opnieuw." en kan er meteen
+opnieuw getikt worden. Een fout wachtwoord geeft "E-mailadres of wachtwoord
+klopt niet."
+
+**Uitloggen** wist eerst de momentopname en roept dan
+`signOut({ scope: "local" })` aan: alleen dit toestel, en dat lukt ook zonder
+verbinding.
+
+### Runbook: Supabase Auth hangt
+
+- **Symptomen:** de app blijft hangen bij het opstarten (sinds de vijfde ronde:
+  na 10 seconden het storingsscherm of de alleen-lezen-weergave), of inloggen
+  eindigt met "Failed to fetch" (nu: "Supabase reageert niet, probeer het zo
+  opnieuw").
+- **Controleren:** Supabase-dashboard → Logs → Edge logs (API gateway). Kijk
+  naar `OPTIONS` en `POST` op `/auth/v1/token`: een **400 na ongeveer 43
+  seconden**, zonder CORS-headers, wijst op een hangende Auth. De database kan
+  intussen gewoon werken.
+- **Oplossing:** Project Settings → General → **Restart project**. Een reboot
+  van alleen de database helpt niet.
+- **Niet de cache of de websitegegevens wissen.** Daarmee gaat de bewaarde
+  login weg en moet je opnieuw inloggen, wat tijdens de storing niet lukt.
+- **Voorbeeld:** op 20 november hing Auth urenlang. De app bleef hangen op
+  "Even kijken of je nog ingelogd bent…" en na het wissen van de cache gaf
+  inloggen "Failed to fetch". Een herstart van het project loste het op; de
+  login bleef al die tijd bewaard.
 
 ## Datamodel
 
@@ -495,11 +600,19 @@ Papier en inkt: een rustig kasboek, geen dashboard. Alle stijl staat in
 - `src/data/boek.test.ts`: de store met een nep-backend (import, periodes,
   termijnen, optimistisch opslaan, startsaldo, export).
 - `src/data/backends.test.ts`: het omzetten van periodes in beide backends.
+- `src/data/momentopname.test.ts`: bewaren en teruglezen, versie, `user_id`,
+  wissen, ander account, beschadigde inhoud, volle of geblokkeerde opslag.
+- `src/data/tijdslimiet.test.ts`: `metTijdslimiet`, `isStoring` en de fetch
+  die alleen Auth-verzoeken afbreekt.
+- In `boek.test.ts` ook het `Boek` bij een storing: momentopname bewaren,
+  alleen lezen, niets in de wachtrij, herstel.
 - Controlegetallen uit de sheet die als test vastliggen: de weekpot bij een
   bekend salaris en bedrag aan vaste lasten, wat er van Extra over is, het
   saldo en de kerncijfers (Total, Uitgave, Rest, Wrk rest). Laat deze tests staan; voeg geen andere echte bedragen toe.
 - Er zijn geen component- of end-to-end-tests. Schermen controleer je met de
-  hand in demo-modus op 360px. Voor de invoer: Vandaag openen (geen veld heeft
+  hand in demo-modus op 360px. Voor een storing: zie "Storingsmodus in demo"
+  bij Commando's (storingsscherm, alleen lezen, alle invoer uit, herstel na
+  `hbDemoStoring(false)` en "Opnieuw proberen"). Voor de invoer: Vandaag openen (geen veld heeft
   focus, geen bedragveld in beeld) → tik op "+ Uitgave" → de focus staat op het
   bedrag; na "Zet erbij" weer; "Klaar" of een andere tab klapt het in.
 
@@ -609,11 +722,44 @@ Papier en inkt: een rustig kasboek, geen dashboard. Alle stijl staat in
   alleen de periode en het saldo. `overzicht.status` blijft bestaan voor "Nog
   te betalen" op Overzicht.
 
+### Vijfde ronde (robuust bij een storing bij Supabase)
+
+Aanleiding: op 20 november hing Supabase Auth urenlang (zie het runbook). De
+app bleef eindeloos hangen bij het opstarten.
+
+- **Time-outs van 10 seconden** voor opstarten en inloggen, met een rustige
+  melding en "Opnieuw proberen" zonder herladen of uitloggen.
+- **Alleen de Auth-verzoeken afbreken** in de eigen `fetch`, niet die naar de
+  database: zo kan een grote import nooit door een tijdslimiet stranden.
+  Opstarten krijgt daarnaast een tijdslimiet rond het hele laden.
+- **Login lezen uit `localStorage` in plaats van te wachten op `getSession()`**:
+  die wacht op het verlengen van het token, en dat hing.
+- **Alleen lezen bij een storing, niet offline invoeren met synchronisatie.**
+  Eenvoud: er is geen wachtrij die het sluiten van de app moet overleven en
+  geen samenvoegen van wijzigingen. Er kan dus niets uit sync raken. Storingen
+  zijn zeldzaam en kort; kijken is dan genoeg.
+- **Momentopname alleen bewaren als de wachtrij leeg is**: dan is hij gelijk
+  aan de server, en toont hij nooit een wijziging die niet is opgeslagen.
+- **Opnieuw proberen elke 30 seconden**, en meteen bij terugkeren in de app
+  (`visibilitychange`) of bij `online`: vaak genoeg om snel te herstellen,
+  zonder Supabase tijdens een storing te bestoken.
+- **Uitloggen alleen op dit toestel** (`scope: "local"`): dat lukt ook zonder
+  verbinding, en logt de gebruiker niet uit op andere toestellen of in de
+  andere app op hetzelfde account.
+- **Storingsmodus in demo** (`?storing=1`): het gedrag is zonder echte storing
+  na te lopen.
+
 ## Bekende beperkingen
 
-- **Geen offline gegevens.** De app-schil werkt offline, maar laden vraagt
-  verbinding en wachtende wijzigingen staan alleen in het geheugen. Sluit je de
-  app terwijl opslaan mislukt, dan zijn ze weg.
+- **Geen offline invoer.** De app-schil werkt offline, en bij een storing
+  toont de app de momentopname alleen-lezen, maar invoeren vraagt verbinding
+  en wachtende wijzigingen staan alleen in het geheugen. Sluit je de app
+  terwijl opslaan mislukt, dan zijn ze weg.
+- **De momentopname bevat alleen de periodes die geladen waren**: meestal
+  alleen de lopende. Bij een storing kun je niet naar andere periodes
+  bladeren.
+- **Een hangend databaseverzoek tijdens gebruik** heeft geen tijdslimiet: de
+  wachtrij wacht dan tot het terugkomt.
 - **Geen synchronisatie tussen toestellen.** Een wijziging op een ander
   toestel zie je pas na opnieuw laden.
 - **Een periode is niet te verwijderen** en zijn datums zijn niet aan te

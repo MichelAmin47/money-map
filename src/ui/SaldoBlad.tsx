@@ -2,7 +2,7 @@ import { useState } from "react";
 import { formatEuro, parseSaldo } from "../logica/geld";
 import type { Periode, SaldoOverzicht } from "../logica/overzicht";
 import { Blad } from "./Blad";
-import { useBoek } from "./context";
+import { useBoek, useStaat } from "./context";
 import { SaldoVeld, saldoInvoer } from "./SaldoVeld";
 
 /** De opbouw van het saldo, en de plek om het startsaldo van de periode aan te passen. */
@@ -18,6 +18,7 @@ export function SaldoBlad({
   onSluit: () => void;
 }) {
   const boek = useBoek();
+  const { alleenLezen } = useStaat();
   const [invoer, setInvoer] = useState(() => saldoInvoer(periode.startsaldo));
   const [fout, setFout] = useState<string | null>(null);
 
@@ -75,7 +76,9 @@ export function SaldoBlad({
           </>
         ) : (
           <p className="hb-hint">
-            Dit is een eerdere periode. Kies "Toch bewerken" om het startsaldo aan te passen.
+            {alleenLezen
+              ? "Geen verbinding: het startsaldo aanpassen kan weer zodra Supabase reageert."
+              : 'Dit is een eerdere periode. Kies "Toch bewerken" om het startsaldo aan te passen.'}
           </p>
         )}
       </form>

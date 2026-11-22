@@ -28,8 +28,25 @@ const upsert = <T extends { id: string }>(lijst: T[], nieuw: T[]): T[] => {
   return [...lijst.filter((x) => !ids.has(x.id)), ...nieuw];
 };
 
-export function maakGeheugenBackend(): Backend & { laatMislukken: (aan: boolean) => void } {
+/**
+ * Storingsmodus, om het gedrag bij een storing bij Supabase na te bootsen:
+ * "hangen" = verzoeken komen nooit terug, "fout" = meteen een netwerkfout.
+ */
+export type DemoStoring = "uit" | "hangen" | "fout";
+
+export function maakGeheugenBackend(storingBijStart: DemoStoring = "uit"): Backend & {
+  laatMislukken: (aan: boolean) => void;
+  zetStoring: (stand: DemoStoring) => void;
+} {
   let mislukt = false;
+  let storing = storingBijStart;
+
+  /** Gooit of blijft hangen zolang de storing aan staat. */
+  const verbinding = async (): Promise<void> => {
+    await new Promise((r) => setTimeout(r, 40));
+    if (storing === "hangen") await new Promise(() => {});
+    if (storing === "fout") throw new TypeError("Failed to fetch");
+  };
 
   const lees = (): Inhoud => {
     try {
@@ -41,7 +58,7 @@ export function maakGeheugenBackend(): Backend & { laatMislukken: (aan: boolean)
   };
 
   const schrijf = async (wijzig: (inhoud: Inhoud) => Inhoud) => {
-    await new Promise((r) => setTimeout(r, 40));
+    await verbinding();
     if (mislukt) throw new Error("Geen verbinding (demo)");
     localStorage.setItem(SLEUTEL, JSON.stringify(wijzig(lees())));
   };
@@ -52,7 +69,13 @@ export function maakGeheugenBackend(): Backend & { laatMislukken: (aan: boolean)
       mislukt = aan;
     },
 
+    /** Alleen voor het testen van de storingsmodus. */
+    zetStoring(stand) {
+      storing = stand;
+    },
+
     async laadBasis() {
+      await verbinding();
       const d = lees();
       return {
         instellingen: d.instellingen,
@@ -68,6 +91,7 @@ export function maakGeheugenBackend(): Backend & { laatMislukken: (aan: boolean)
     },
 
     async laadPeriode(periodeId) {
+      await verbinding();
       const d = lees();
       return {
         regels: d.regels

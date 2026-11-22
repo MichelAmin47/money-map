@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dagVanWeek, plusDagen, plusMaand } from "./datum";
+import { dagVanWeek, formatMoment, plusDagen, plusMaand } from "./datum";
 import { formatEuro, formatInvoer, naarCenten, parseBedrag } from "./geld";
 import { berekenOverzicht, topWinkels, type Periode, type Uitgave } from "./overzicht";
 import {
@@ -522,5 +522,12 @@ describe("startdata importeren", () => {
         vasteLasten: [{ naam: "X", bedrag: 1, pot: "vast", termijn: { huidig: 9, totaal: 8 } }],
       }),
     ).toThrow(/termijn/);
+  });
+});
+
+describe("formatMoment", () => {
+  it("toont dag, datum en tijd in de lokale tijd", () => {
+    expect(formatMoment(new Date(2026, 10, 21, 11, 12))).toBe("za 21 nov 11:12");
+    expect(formatMoment(new Date(2026, 0, 5, 9, 3))).toBe("ma 5 jan 09:03");
   });
 });

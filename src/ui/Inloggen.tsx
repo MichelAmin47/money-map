@@ -1,12 +1,21 @@
 import { useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isStoring, metTijdslimiet } from "../data/tijdslimiet";
+
+const GEEN_ANTWOORD = "Supabase reageert niet, probeer het zo opnieuw.";
 
 /**
  * Inloggen met e-mailadres en wachtwoord. Registreren en wachtwoord vergeten
  * zitten bewust niet in de app: het account bestaat al in Supabase.
  */
 export function Inloggen({ supabase }: { supabase: SupabaseClient }) {
-  const [email, setEmail] = useState(() => localStorage.getItem("hb-email") ?? "");
+  const [email, setEmail] = useState(() => {
+    try {
+      return localStorage.getItem("hb-email") ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [wachtwoord, setWachtwoord] = useState("");
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
@@ -18,22 +27,28 @@ export function Inloggen({ supabase }: { supabase: SupabaseClient }) {
     setBezig(true);
     setFout(null);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: adres,
-        password: wachtwoord,
-      });
+      // Hooguit 10 seconden wachten; daarna kan er meteen opnieuw getikt worden.
+      const { error } = await metTijdslimiet(
+        supabase.auth.signInWithPassword({ email: adres, password: wachtwoord }),
+      );
       if (error) {
         setFout(
-          error.status === 400 || /invalid login credentials/i.test(error.message)
-            ? "E-mailadres of wachtwoord klopt niet."
-            : `Inloggen lukte niet: ${error.message}`,
+          isStoring(error)
+            ? GEEN_ANTWOORD
+            : error.status === 400 || /invalid login credentials/i.test(error.message)
+              ? "E-mailadres of wachtwoord klopt niet."
+              : `Inloggen lukte niet: ${error.message}`,
         );
         return;
       }
       // Bij succes meldt onAuthStateChange de sessie en verdwijnt dit scherm.
-      localStorage.setItem("hb-email", adres);
-    } catch {
-      setFout("Inloggen lukte niet. Heb je verbinding?");
+      try {
+        localStorage.setItem("hb-email", adres);
+      } catch {
+        // Het e-mailadres onthouden is alleen gemak.
+      }
+    } catch (e) {
+      setFout(isStoring(e) ? GEEN_ANTWOORD : "Inloggen lukte niet. Probeer het zo opnieuw.");
     } finally {
       setBezig(false);
     }

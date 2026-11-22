@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
 import type { Backend } from "./data/backend";
 import { Boek } from "./data/boek";
-import { maakGeheugenBackend } from "./data/geheugenBackend";
-import { DEMO, supabase } from "./data/supabase";
+import { maakGeheugenBackend, type DemoStoring } from "./data/geheugenBackend";
+import {
+  leesBewaardeGebruiker,
+  leesMomentopname,
+  standaardOpslag,
+  wisMomentopname,
+  type Opslag,
+} from "./data/momentopname";
+import { DEMO, SESSIE_SLEUTEL, supabase } from "./data/supabase";
 import { maakSupabaseBackend } from "./data/supabaseBackend";
-import { formatKort, jaarVan } from "./logica/datum";
+import { isStoring, metTijdslimiet } from "./data/tijdslimiet";
+import { formatKort, formatMoment, jaarVan } from "./logica/datum";
 import { formatEuro } from "./logica/geld";
 import { BoekContext, useBeeld, useBoek, useStaat } from "./ui/context";
 import { Inloggen } from "./ui/Inloggen";
@@ -48,8 +55,13 @@ function useTab(): Tab {
   return tab;
 }
 
+/** Hoe vaak de app het bij een storing op de achtergrond opnieuw probeert. */
+const OPNIEUW_MS = 30_000;
+
 export function App() {
-  if (DEMO) return <MetBoek sleutel="demo" backend={demoBackend()} />;
+  if (DEMO) {
+    return <MetBoek sleutel="demo" backend={demoBackend()} opslag={standaardOpslag()} />;
+  }
   if (!supabase) return <NietIngesteld />;
   return <MetSessie />;
 }
@@ -57,9 +69,16 @@ export function App() {
 let demo: Backend | null = null;
 function demoBackend(): Backend {
   if (!demo) {
-    const b = maakGeheugenBackend();
+    // Storingsmodus: ?storing=1 laat elk verzoek hangen, ?storing=fout geeft
+    // meteen een netwerkfout. In de console zet hbDemoStoring(false) hem uit.
+    const param = new URLSearchParams(window.location.search).get("storing");
+    const stand: DemoStoring = param === "fout" ? "fout" : param ? "hangen" : "uit";
+    const b = maakGeheugenBackend(stand);
     // Alleen in demo-modus: opslaan laten mislukken om de foutmelding te zien.
-    (window as unknown as Record<string, unknown>).hbDemoMislukken = b.laatMislukken;
+    const w = window as unknown as Record<string, unknown>;
+    w.hbDemoMislukken = b.laatMislukken;
+    w.hbDemoStoring = (aan: boolean | DemoStoring) =>
+      b.zetStoring(aan === true ? "hangen" : aan === false ? "uit" : aan);
     demo = b;
   }
   return demo;
@@ -80,25 +99,110 @@ function NietIngesteld() {
 
 function MetSessie() {
   const sb = supabase!;
-  // undefined = nog aan het kijken of er een bewaarde sessie is
-  const [sessie, setSessie] = useState<Session | null | undefined>(undefined);
+  const opslag = useMemo(standaardOpslag, []);
+  // De login staat op dit toestel; die lezen we zonder netwerk, zodat een
+  // hangende Auth het opstarten niet tegenhoudt. undefined = nog onbekend,
+  // null = niet ingelogd, anders de user_id.
+  const [gebruiker, setGebruiker] = useState<string | null | undefined>(
+    () => leesBewaardeGebruiker(opslag, SESSIE_SLEUTEL) ?? undefined,
+  );
+  const [storing, setStoring] = useState(false);
+  const [bezig, setBezig] = useState(false);
+  const [poging, setPoging] = useState(0);
+  const onbekend = gebruiker === undefined;
+
+  // Geen leesbare login op het toestel: vraag het aan Supabase, met tijdslimiet.
+  useEffect(() => {
+    if (!onbekend) return;
+    let weg = false;
+    setBezig(true);
+    metTijdslimiet(sb.auth.getSession())
+      .then(
+        ({ data, error }) => {
+          if (weg) return;
+          if (data.session) setGebruiker(data.session.user.id);
+          // Verlengen lukte niet door een storing: de login blijft bewaard.
+          else if (error && isStoring(error)) setStoring(true);
+          else setGebruiker(null);
+        },
+        () => !weg && setStoring(true),
+      )
+      .finally(() => !weg && setBezig(false));
+    return () => {
+      weg = true;
+    };
+  }, [sb, onbekend, poging]);
+
+  // Ook hier af en toe opnieuw proberen, en als de app weer in beeld komt.
+  useEffect(() => {
+    if (!onbekend || !storing) return;
+    const probeer = () => setPoging((n) => n + 1);
+    const zichtbaar = () => document.visibilityState === "visible" && probeer();
+    const klok = window.setInterval(probeer, OPNIEUW_MS);
+    document.addEventListener("visibilitychange", zichtbaar);
+    return () => {
+      window.clearInterval(klok);
+      document.removeEventListener("visibilitychange", zichtbaar);
+    };
+  }, [onbekend, storing]);
 
   useEffect(() => {
-    void sb.auth.getSession().then(({ data }) => setSessie(data.session));
-    const { data } = sb.auth.onAuthStateChange((_gebeurtenis, s) => setSessie(s));
+    const { data } = sb.auth.onAuthStateChange((gebeurtenis, s) => {
+      if (s) {
+        setStoring(false);
+        setGebruiker(s.user.id);
+      } else if (gebeurtenis === "SIGNED_OUT") {
+        // Alleen een echte uitlog telt. Bij een storing meldt Supabase soms een
+        // lege INITIAL_SESSION terwijl de login gewoon bewaard blijft.
+        wisMomentopname(opslag);
+        setGebruiker(null);
+      }
+    });
     return () => data.subscription.unsubscribe();
-  }, [sb]);
+  }, [sb, opslag]);
+
+  // Zonder login hoort er geen momentopname te zijn; van een ander account
+  // wordt hij bij het lezen gewist.
+  useEffect(() => {
+    if (gebruiker === null) wisMomentopname(opslag);
+    else if (gebruiker) leesMomentopname(opslag, gebruiker);
+  }, [gebruiker, opslag]);
 
   const backend = useMemo(() => maakSupabaseBackend(sb), [sb]);
 
-  if (sessie === undefined) return <Laden tekst="Even kijken of je nog ingelogd bent…" />;
-  if (!sessie) return <Inloggen supabase={sb} />;
+  if (onbekend) {
+    if (!storing) return <Laden tekst="Even kijken of je nog ingelogd bent…" />;
+    return <StoringScherm bezig={bezig} onOpnieuw={() => setPoging((n) => n + 1)} />;
+  }
+  if (!gebruiker) return <Inloggen supabase={sb} />;
   return (
     <MetBoek
-      sleutel={sessie.user.id}
+      sleutel={gebruiker}
       backend={backend}
-      onUitloggen={() => void sb.auth.signOut()}
+      opslag={opslag}
+      onUitloggen={() => {
+        wisMomentopname(opslag);
+        setGebruiker(null);
+        // Alleen op dit toestel uitloggen: dat lukt ook zonder verbinding.
+        void sb.auth.signOut({ scope: "local" });
+      }}
     />
+  );
+}
+
+/** Supabase reageert niet en er is niets bewaard om te tonen. */
+function StoringScherm({ onOpnieuw, bezig = false }: { onOpnieuw: () => void; bezig?: boolean }) {
+  return (
+    <main className="hb-root">
+      <div className="hb-storing hb-storing-scherm" role="alert">
+        <h2>Supabase reageert niet</h2>
+        <p>Je gegevens zijn veilig; probeer het zo opnieuw.</p>
+        <p className="hb-hint">Je blijft ingelogd. De app probeert het zelf ook elke halve minuut.</p>
+        <button className="hb-knop hb-knop-hoofd" disabled={bezig} onClick={onOpnieuw}>
+          {bezig ? "Bezig…" : "Opnieuw proberen"}
+        </button>
+      </div>
+    </main>
   );
 }
 
@@ -113,14 +217,19 @@ function Laden({ tekst }: { tekst: string }) {
 function MetBoek({
   sleutel,
   backend,
+  opslag,
   onUitloggen,
 }: {
   sleutel: string;
   backend: Backend;
+  opslag: Opslag | null;
   onUitloggen?: () => void;
 }) {
   // Eén Boek per ingelogde gebruiker.
-  const boek = useMemo(() => new Boek(backend), [sleutel, backend]);
+  const boek = useMemo(
+    () => new Boek(backend, { gebruiker: sleutel, opslag }),
+    [sleutel, backend, opslag],
+  );
   useEffect(() => {
     void boek.laad();
   }, [boek]);
@@ -145,6 +254,23 @@ function Schil({ onUitloggen }: { onUitloggen?: () => void }) {
     return () => window.removeEventListener("online", boek.opnieuwOpslaan);
   }, [boek]);
 
+  // Storing bij het opstarten: af en toe opnieuw proberen, en meteen als de
+  // app weer in beeld komt of er weer verbinding is.
+  const storing = s.alleenLezen != null || (s.fase === "fout" && s.laadStoring);
+  useEffect(() => {
+    if (!storing) return;
+    const probeer = () => void boek.laad({ stil: true });
+    const zichtbaar = () => document.visibilityState === "visible" && probeer();
+    const klok = window.setInterval(probeer, OPNIEUW_MS);
+    document.addEventListener("visibilitychange", zichtbaar);
+    window.addEventListener("online", probeer);
+    return () => {
+      window.clearInterval(klok);
+      document.removeEventListener("visibilitychange", zichtbaar);
+      window.removeEventListener("online", probeer);
+    };
+  }, [boek, storing]);
+
   // Waarschuw bij sluiten zolang er nog iets niet is opgeslagen.
   const wachtend = s.opslag.wachtend;
   useEffect(() => {
@@ -155,6 +281,9 @@ function Schil({ onUitloggen }: { onUitloggen?: () => void }) {
   }, [wachtend]);
 
   if (s.fase === "laden") return <Laden tekst="Even je periode ophalen…" />;
+  if (s.fase === "fout" && s.laadStoring) {
+    return <StoringScherm bezig={s.opnieuwBezig} onOpnieuw={() => void boek.laad({ stil: true })} />;
+  }
   if (s.fase === "fout") {
     return (
       <main className="hb-root">
@@ -169,10 +298,12 @@ function Schil({ onUitloggen }: { onUitloggen?: () => void }) {
     );
   }
 
-  const { periode, overzicht, isLopende, bewerkbaar } = beeld;
-  const index = s.periodes.findIndex((p) => p.id === periode?.id);
-  const vorige = index > 0 ? s.periodes[index - 1] : undefined;
-  const volgende = index >= 0 ? s.periodes[index + 1] : undefined;
+  const { periode, overzicht, isLopende, bewerkbaar, alleenLezen } = beeld;
+  // Alleen lezen: bladeren kan alleen naar periodes die in de momentopname zitten.
+  const periodes = alleenLezen ? s.periodes.filter((p) => s.data[p.id]) : s.periodes;
+  const index = periodes.findIndex((p) => p.id === periode?.id);
+  const vorige = index > 0 ? periodes[index - 1] : undefined;
+  const volgende = index >= 0 ? periodes[index + 1] : undefined;
   const lopende = s.periodes.at(-1);
   const openNieuwePeriode = () => setNieuwePeriode(true);
 
@@ -225,6 +356,25 @@ function Schil({ onUitloggen }: { onUitloggen?: () => void }) {
         )}
       </header>
 
+      {s.alleenLezen && (
+        <div className="hb-storing" role="status">
+          <p>
+            <strong>Geen verbinding · gegevens van {formatMoment(new Date(s.alleenLezen.bewaardOp))}</strong>
+          </p>
+          <p>
+            Alleen lezen. Invoeren kan weer zodra Supabase reageert; de app probeert het zelf elke
+            halve minuut.
+          </p>
+          <button
+            className="hb-knop hb-knop-hoofd"
+            disabled={s.opnieuwBezig}
+            onClick={() => void boek.laad({ stil: true })}
+          >
+            {s.opnieuwBezig ? "Bezig…" : "Opnieuw proberen"}
+          </button>
+        </div>
+      )}
+
       {s.opslag.fout && (
         <div className="hb-fout" role="alert">
           <p>
@@ -247,7 +397,7 @@ function Schil({ onUitloggen }: { onUitloggen?: () => void }) {
               : "Eerdere periode: alleen-lezen."}
           </p>
           <div className="hb-melding-knoppen">
-            {!bewerkbaar && (
+            {!bewerkbaar && !alleenLezen && (
               <button
                 className="hb-knop hb-knop-rustig"
                 onClick={() => {

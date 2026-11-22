@@ -5,7 +5,7 @@ import { UitgaveInvoer } from "../UitgaveInvoer";
 import { UitgavenLijst } from "../WeekBlok";
 
 export function Extra() {
-  const { periode, data, overzicht, isLopende, bewerkbaar } = useBeeld();
+  const { periode, data, overzicht, isLopende, bewerkbaar, alleenLezen } = useBeeld();
   if (!periode || !overzicht) {
     return <p className="hb-hint">Nog geen periode gestart.</p>;
   }
@@ -38,7 +38,7 @@ export function Extra() {
         />
       </section>
 
-      {bewerkbaar && (
+      {(bewerkbaar || (alleenLezen && isLopende)) && (
         <UitgaveInvoer
           periodeId={periode.id}
           standaardDatum={isLopende ? vandaagISO() : periode.startdatum}

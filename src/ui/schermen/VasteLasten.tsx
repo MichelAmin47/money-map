@@ -72,7 +72,7 @@ function PostFormulier({
     if (regel && periodeCenten != null && periodeCenten !== regel.bedrag) {
       // De regel opnieuw ophalen: wijzigVasteLast kan hem net hebben bijgewerkt.
       const nu =
-        boek.momentopname().data[regel.periodeId]?.regels.find((r) => r.id === regel.id) ?? regel;
+        boek.staatNu().data[regel.periodeId]?.regels.find((r) => r.id === regel.id) ?? regel;
       boek.wijzigRegel({ ...nu, bedrag: periodeCenten });
     }
     onSluit();
@@ -229,12 +229,13 @@ interface Post {
 export function VasteLasten() {
   const boek = useBoek();
   const s = useStaat();
-  const { periode, data, isLopende, bewerkbaar } = useBeeld();
+  const { periode, data, isLopende, bewerkbaar, alleenLezen } = useBeeld();
   const [bewerk, setBewerk] = useState<Post | null>(null);
   const [nieuw, setNieuw] = useState<WeekPot | null>(null);
 
-  // Posten beheren kan in de lopende periode, of als er nog geen periode is.
-  const beheer = !periode || isLopende;
+  // Posten beheren kan in de lopende periode, of als er nog geen periode is,
+  // maar niet bij een storing (alleen lezen).
+  const beheer = (!periode || isLopende) && !alleenLezen;
 
   const posten: Post[] = periode
     ? data.regels.map((r) => ({

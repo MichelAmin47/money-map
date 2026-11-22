@@ -24,6 +24,8 @@ export function Instellingen({
   const boek = useBoek();
   const s = useStaat();
   const i = s.instellingen;
+  // Storing: alles hier staat uit, behalve het saldo bekijken en uitloggen.
+  const uit = s.alleenLezen != null;
 
   const [salaris, setSalaris] = useState(formatInvoer(i.salaris));
   const [perc, setPerc] = useState({
@@ -115,11 +117,17 @@ export function Instellingen({
 
   return (
     <div className="hb-instel">
+      {uit && (
+        <p className="hb-melding" role="status">
+          Geen verbinding: instellingen, een nieuwe periode en de import en export kunnen weer
+          zodra Supabase reageert.
+        </p>
+      )}
       <section className="hb-groep">
         <header className="hb-groep-kop">
           <h2>Salaris en verdeling</h2>
         </header>
-        <div className="hb-formulier">
+        <fieldset className="hb-formulier hb-fieldset" disabled={uit}>
           <label className="hb-veldlabel">
             <span>Salaris per periode</span>
             <input
@@ -187,7 +195,7 @@ export function Instellingen({
             Wijzigingen gelden meteen voor de lopende periode en voor volgende periodes. Eerdere
             periodes houden hun eigen salaris en verdeling.
           </p>
-        </div>
+        </fieldset>
       </section>
 
       <section className="hb-groep">
@@ -195,7 +203,7 @@ export function Instellingen({
           <h2>Periode</h2>
         </header>
         <div className="hb-formulier">
-          <button className="hb-knop hb-knop-rustig" onClick={onNieuwePeriode}>
+          <button className="hb-knop hb-knop-rustig" onClick={onNieuwePeriode} disabled={uit}>
             Nieuwe periode starten…
           </button>
           {s.periodes.length > 0 && (
@@ -210,7 +218,7 @@ export function Instellingen({
         <header className="hb-groep-kop">
           <h2>Export en import</h2>
         </header>
-        <div className="hb-formulier">
+        <fieldset className="hb-formulier hb-fieldset" disabled={uit}>
           <button className="hb-knop hb-knop-rustig" onClick={exporteer}>
             Exporteer als JSON
           </button>
@@ -235,7 +243,7 @@ export function Instellingen({
             De export bevat je instellingen, vaste lasten en alle periodes (met startsaldo). De import leest het
             formaat van <code>startdata.json</code>: instellingen, vaste lasten en winkels.
           </p>
-        </div>
+        </fieldset>
       </section>
 
       {onUitloggen && (
