@@ -1,6 +1,7 @@
 :root {
   --papier: #e9ede4;
   --papier-op: #f6f8f2;
+  --papier-kop: #dce3d4;
   --inkt: #1b2a24;
   --inkt-zacht: #56655c;
   --lijn: #c6d0be;
@@ -431,6 +432,11 @@ code {
   flex-shrink: 0;
   white-space: nowrap;
 }
+/* Het grote getal: wat er deze week samen over is (met doorschuiven). */
+.hb-week-over {
+  font-size: 15px;
+  font-weight: 500;
+}
 .hb-week-open {
   background: var(--papier-op);
 }
@@ -523,6 +529,21 @@ code {
 }
 .hb-week-lees .hb-leeg {
   padding: 4px 0;
+}
+/* Overzicht: elke week een eigen kaart, met een donkerdere kop. */
+.hb-ov-weken .hb-week {
+  border: 1px solid var(--lijn);
+  margin-bottom: 14px;
+}
+.hb-ov-weken .hb-week-kop {
+  background: var(--papier-kop);
+  border-bottom: 1px solid var(--lijn);
+}
+.hb-ov-weken .hb-week-body {
+  padding-top: 8px;
+}
+.hb-ov-weken .hb-week-nu {
+  border: 2px solid var(--stempel);
 }
 
 /* ---------- lijsten ---------- */
@@ -1307,6 +1328,9 @@ select.hb-veld {
   .hb-week-cijfers,
   .hb-urij-bedrag {
     font-size: 12px;
+  }
+  .hb-week-over {
+    font-size: 14px;
   }
   .hb-saldo-bedrag {
     font-size: 26px;

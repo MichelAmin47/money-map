@@ -213,33 +213,35 @@ function WeekUitgaven({
 }
 
 /**
- * Wat er uit de vorige week is doorgeschoven, per kolom recht onder de
- * bedragen in de kop, met eronder wat er samen met het eigen weekbedrag over
- * is. Een kolom zonder doorgeschoven bedrag blijft leeg; zijn beide €0, dan
- * staat de regel er niet.
+ * De opbouw van "samen over" in een opengeklapte week, klein en grijs recht
+ * onder de grote bedragen in de kop: het eigen weekbedrag min de uitgaven, en
+ * wat er uit de vorige week is doorgeschoven. Die tweede regel staat er alleen
+ * als er iets is doorgeschoven; een kolom met €0 blijft leeg.
  */
-function Doorgeschoven({ week }: { week: WeekOverzicht }) {
+function Opbouw({ week }: { week: WeekOverzicht }) {
   const { vast, persoonlijk } = week;
-  if (vast.doorgeschoven === 0 && persoonlijk.doorgeschoven === 0) return null;
-  const cel = (stand: WeekOverzicht["vast"], naam: string) =>
-    stand.doorgeschoven === 0 ? (
-      <span />
-    ) : (
-      <span
-        className="hb-door-cel"
-        aria-label={`${naam}: ${formatMetTeken(stand.doorgeschoven)} doorgeschoven, samen ${formatEuro(stand.over)} over`}
-      >
+  const metDoor = vast.doorgeschoven !== 0 || persoonlijk.doorgeschoven !== 0;
+  const cel = (stand: WeekOverzicht["vast"], naam: string) => (
+    <span
+      className="hb-door-cel"
+      aria-label={
+        `${naam}: weekbedrag ${formatEuro(stand.eigenOver)}` +
+        (stand.doorgeschoven !== 0 ? `, ${formatMetTeken(stand.doorgeschoven)} doorgeschoven` : "")
+      }
+    >
+      <span className={stand.eigenOver < 0 ? "hb-rood" : ""}>{formatEuro(stand.eigenOver)}</span>
+      {metDoor && (
         <span className={stand.doorgeschoven < 0 ? "hb-rood" : ""}>
-          {formatMetTeken(stand.doorgeschoven)}
+          {stand.doorgeschoven === 0 ? "\u00a0" : formatMetTeken(stand.doorgeschoven)}
         </span>
-        <span className={stand.over < 0 ? "hb-rood" : ""}>{formatEuro(stand.over)}</span>
-      </span>
-    );
+      )}
+    </span>
+  );
   return (
     <div className="hb-door">
       <span className="hb-door-label" aria-hidden="true">
-        <span>doorgeschoven</span>
-        <span>samen over</span>
+        <span>weekbedrag</span>
+        {metDoor && <span>doorgeschoven</span>}
       </span>
       {cel(vast, "Vaste lasten")}
       {cel(persoonlijk, "Persoonlijk")}
@@ -248,9 +250,9 @@ function Doorgeschoven({ week }: { week: WeekOverzicht }) {
 }
 
 /**
- * Eén weekblok. De kop toont per pot wat de week van haar eigen weekbedrag
- * over heeft (zonder doorschuiven). Opengeklapt staan de kolomnamen boven die
- * bedragen, met eronder de doorgeschoven-regel en de uitgaven.
+ * Eén weekblok. De kop toont per pot groot wat er deze week samen over is:
+ * het weekbedrag min de uitgaven plus wat er is doorgeschoven. Opengeklapt
+ * staan de kolomnamen erboven, en eronder de opbouw en de uitgaven.
  */
 export function WeekBlok({
   week,
@@ -286,15 +288,22 @@ export function WeekBlok({
             <span className="hb-week-kolomnaam">Persoonlijk</span>
           </>
         )}
-        <span className={vast.eigenOver < 0 ? "hb-rood" : ""}>{formatEuro(vast.eigenOver)}</span>
-        <span className={persoonlijk.eigenOver < 0 ? "hb-rood" : ""}>
-          {formatEuro(persoonlijk.eigenOver)}
+        <span className={vast.over < 0 ? "hb-week-over hb-rood" : "hb-week-over"}>
+          {formatEuro(vast.over)}
+        </span>
+        <span className={persoonlijk.over < 0 ? "hb-week-over hb-rood" : "hb-week-over"}>
+          {formatEuro(persoonlijk.over)}
         </span>
       </span>
     </>
   );
 
-  const klassen = ["hb-week", open && "hb-week-open", alleenLezen && "hb-week-lees"]
+  const klassen = [
+    "hb-week",
+    open && "hb-week-open",
+    alleenLezen && "hb-week-lees",
+    isNu && "hb-week-nu",
+  ]
     .filter(Boolean)
     .join(" ");
   return (
@@ -308,7 +317,7 @@ export function WeekBlok({
       )}
       {open && (
         <div className="hb-week-body">
-          <Doorgeschoven week={week} />
+          <Opbouw week={week} />
           <WeekUitgaven
             uitgaven={week.uitgaven}
             bewerkbaar={bewerkbaar && !alleenLezen}

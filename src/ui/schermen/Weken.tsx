@@ -19,7 +19,7 @@ export function Weken() {
   return (
     <div className="hb-weken">
       <div className="hb-kolomkop">
-        <span>over van de week</span>
+        <span>samen over</span>
         <span>vaste lasten</span>
         <span>persoonlijk</span>
       </div>

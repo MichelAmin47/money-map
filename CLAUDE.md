@@ -140,12 +140,16 @@ vaste lasten.
   `WeekStand`: `basis` (weekbedrag), `doorgeschoven`, `beschikbaar`
   (basis + doorgeschoven), `uitgegeven`, `over` (schuift door) en `eigenOver`
   (basis − uitgegeven, zonder doorschuiven).
-- De **kop van een week** toont `eigenOver`, ingeklapt en opengeklapt. Een
-  **opengeklapte week** heeft de kolomnamen boven die bedragen en, als er iets
-  is doorgeschoven, één kleine regel eronder: per kolom `doorgeschoven`
-  ("+ € 45,00" of "− € 12,00", `formatMetTeken`) met daaronder `over` ("samen
-  over"). Een kolom met €0 doorgeschoven blijft leeg; zijn beide €0, dan staat
-  de regel er niet. Daaronder staan de uitgaven.
+- De **kop van een week** toont per kolom groot `over` ("samen over" =
+  weekbedrag − uitgaven van die week + doorgeschoven), rood als het negatief
+  is; ingeklapt alleen die regel. Dat geldt overal: Vandaag, Weken en
+  Overzicht. Een **opengeklapte week** heeft de kolomnamen boven die bedragen
+  en daaronder twee kleine, grijze regels (`Opbouw` in `WeekBlok.tsx`):
+  "weekbedrag" (`eigenOver`, het eigen weekbedrag min de uitgaven) en
+  "doorgeschoven" (`formatMetTeken`, rood als het negatief is). De regel
+  doorgeschoven staat er alleen als er in een van de kolommen iets is
+  doorgeschoven; een kolom met €0 blijft dan leeg. Daaronder staan de
+  uitgaven.
 - Uitgaven uit de pot **Extra tellen niet mee** in de weekbedragen.
   Extra = salaris × percentage − alle extra-uitgaven van de periode.
 - `berekenOverzicht(periode, regels, uitgaven)` in `overzicht.ts` leidt alle
@@ -256,7 +260,9 @@ over is in de pot Extra: `overzicht.extra.over`, hetzelfde bedrag als bij
 "Per pot", rood als het negatief is; de andere twee koppen hebben geen
 bedrag); en alle weken opengeklapt
 (`WeekBlok` met `alleenLezen`: geen knoppen, geen formulier, samengevoegde
-regels klappen niet uit). Op een telefoon staan de twee lijsten naast elkaar
+regels klappen niet uit). Elke week is daar een eigen kaart met een donkere
+kop (`--papier-kop`) en witruimte ertussen; de huidige week heeft een rand in
+de stempelkleur (`hb-week-nu`). Op een telefoon staan de twee lijsten naast elkaar
 met Extra eronder; vanaf 900px staan ze alle drie naast elkaar en is de pagina
 breder (`hb-root-breed`, alleen op deze tab).
 
@@ -565,6 +571,7 @@ Papier en inkt: een rustig kasboek, geen dashboard. Alle stijl staat in
 | --- | --- | --- |
 | `--papier` | `#e9ede4` | achtergrond (groengrijs papier) |
 | `--papier-op` | `#f6f8f2` | kaarten, open weekblok, dialoog |
+| `--papier-kop` | `#dce3d4` | kop van een weekkaart op Overzicht |
 | `--inkt` | `#1b2a24` | tekst, dikke lijnen |
 | `--inkt-zacht` | `#56655c` | labels, bijschriften |
 | `--lijn` | `#c6d0be` | dunne lijnen, randen |
@@ -586,6 +593,8 @@ Papier en inkt: een rustig kasboek, geen dashboard. Alle stijl staat in
   uitgavenlijst gebruiken hem alle drie, zodat de bedragen recht onder elkaar
   staan.
 - Negatief is rood (`hb-rood`), ontvangen is groen (`hb-groen`).
+- **Negatieve bedragen** hebben overal een los minteken vooraan: "− € 10,88"
+  (`formatEuro`; Intl zou "€ -10,88" geven).
 - **Vaste lasten:** een rij is 44px hoog (`hb-post`). Het vakje is 22px, in een
   tikvlak van 44×44px (`hb-stempel`).
 - **Overzicht** (`hb-ov-…`) is een leesscherm: tekst van 11–13px, namen worden
@@ -648,7 +657,7 @@ Papier en inkt: een rustig kasboek, geen dashboard. Alle stijl staat in
 ### Tweede ronde (na het eerste dagelijkse gebruik)
 
 - **Ingeklapte weekrij toont het eigen weekbedrag min de uitgaven**, niet
-  "beschikbaar". Met het doorgeschoven bedrag erbij was niet te zien hoe een
+  "beschikbaar" (teruggedraaid in de vijfde ronde). Met het doorgeschoven bedrag erbij was niet te zien hoe een
   week zelf was gegaan. Het doorschuiven is niet veranderd; `eigenOver` is een
   extra veld naast de bestaande.
 - **Eerste en laatste blok lopen tot de grenzen van de periode**, in
@@ -748,6 +757,18 @@ app bleef eindeloos hangen bij het opstarten.
   andere app op hetzelfde account.
 - **Storingsmodus in demo** (`?storing=1`): het gedrag is zonder echte storing
   na te lopen.
+- **"Samen over" is het grote getal in de kop van een week**, ingeklapt en
+  opengeklapt. Dit draait de keuze uit ronde 2 terug (ingeklapt het bedrag
+  zonder doorschuiven). Reden: "samen over" is wat de gebruiker echt nog kan
+  uitgeven. Met een negatief doorgeschoven bedrag stond er groot € 68,94
+  terwijl er maar € 58,06 over was. Het eigen weekbedrag en het doorgeschoven
+  bedrag staan opengeklapt klein en grijs eronder. De kolomkop op Weken heet
+  daarom "samen over".
+- **Weken op Overzicht als losse kaarten**, met een donkere kop en de huidige
+  week omrand in stempelrood: ze liepen in elkaar over, gescheiden door
+  dezelfde dunne lijn als tussen de uitgaven.
+- **Eén notatie voor negatieve bedragen**: "− € 10,88" overal, ook in
+  `formatEuro`, gelijk aan `formatMetTeken`.
 
 ## Bekende beperkingen
 

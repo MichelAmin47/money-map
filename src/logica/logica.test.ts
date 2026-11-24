@@ -45,6 +45,11 @@ describe("bedragen invoeren en tonen", () => {
     expect(formatEuro(472049).replace(/\s/g, " ")).toBe("€ 4.720,49");
     expect(formatInvoer(1250)).toBe("12,50");
   });
+  it("zet bij een negatief bedrag het minteken vooraan", () => {
+    expect(formatEuro(-1088).replace(/\s/g, " ")).toBe("− € 10,88");
+    expect(formatEuro(-123456).replace(/\s/g, " ")).toBe("− € 1.234,56");
+    expect(formatEuro(-0).replace(/\s/g, " ")).toBe("€ 0,00");
+  });
 });
 
 describe("verdeling over de potten", () => {
