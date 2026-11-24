@@ -88,6 +88,7 @@ describe("kerncijfers", () => {
       p,
       [regel("a", 100000, true), regel("b", 50000, false)],
       [uitgave("1", 2000, "vast"), uitgave("2", 3000, "persoonlijk"), uitgave("3", 5000, "extra")],
+      { vandaag: "2026-01-05" },
     );
     expect(o.kern).toEqual({
       salaris: 300000,

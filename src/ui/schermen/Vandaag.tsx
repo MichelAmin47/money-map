@@ -49,7 +49,7 @@ export function Vandaag() {
       )}
 
       {week ? (
-        <WeekBlok week={week} open isNu bewerkbaar={bewerkbaar}>
+        <WeekBlok week={week} open isNu={week.fase === "huidig"} bewerkbaar={bewerkbaar}>
           <UitgaveInvoer periodeId={periode.id} standaardDatum={vandaag} termijnenMogelijk />
         </WeekBlok>
       ) : (

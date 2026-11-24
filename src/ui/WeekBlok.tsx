@@ -213,20 +213,22 @@ function WeekUitgaven({
 }
 
 /**
- * De opbouw van "samen over" in een opengeklapte week, klein en grijs recht
- * onder de grote bedragen in de kop: het eigen weekbedrag min de uitgaven, en
- * wat er uit de vorige week is doorgeschoven. Die tweede regel staat er alleen
- * als er iets is doorgeschoven; een kolom met €0 blijft leeg.
+ * De opbouw van het grote bedrag in een opengeklapte week, klein en grijs
+ * recht onder de bedragen in de kop: het eigen weekbedrag min de uitgaven, en
+ * (alleen in de huidige week) wat de voorbije weken samen hebben
+ * doorgeschoven. Die tweede regel staat er alleen als er iets is
+ * doorgeschoven; een kolom met €0 blijft leeg.
  */
 function Opbouw({ week }: { week: WeekOverzicht }) {
   const { vast, persoonlijk } = week;
-  const metDoor = vast.doorgeschoven !== 0 || persoonlijk.doorgeschoven !== 0;
+  const metDoor =
+    week.fase === "huidig" && (vast.doorgeschoven !== 0 || persoonlijk.doorgeschoven !== 0);
   const cel = (stand: WeekOverzicht["vast"], naam: string) => (
     <span
       className="hb-door-cel"
       aria-label={
         `${naam}: weekbedrag ${formatEuro(stand.eigenOver)}` +
-        (stand.doorgeschoven !== 0 ? `, ${formatMetTeken(stand.doorgeschoven)} doorgeschoven` : "")
+        (metDoor && stand.doorgeschoven !== 0 ? `, ${formatMetTeken(stand.doorgeschoven)} doorgeschoven` : "")
       }
     >
       <span className={stand.eigenOver < 0 ? "hb-rood" : ""}>{formatEuro(stand.eigenOver)}</span>
@@ -250,8 +252,9 @@ function Opbouw({ week }: { week: WeekOverzicht }) {
 }
 
 /**
- * Eén weekblok. De kop toont per pot groot wat er deze week samen over is:
- * het weekbedrag min de uitgaven plus wat er is doorgeschoven. Opengeklapt
+ * Eén weekblok. De kop toont per pot groot wat er over is (`over`): bij een
+ * voorbije of komende week het eigen weekbedrag min de uitgaven, bij de
+ * huidige week met wat de voorbije weken doorschuiven erbij. Opengeklapt
  * staan de kolomnamen erboven, en eronder de opbouw en de uitgaven.
  */
 export function WeekBlok({

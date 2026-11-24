@@ -44,38 +44,65 @@ export function verdeelOverWeken(pot: Centen, aantalWeken: number): Centen[] {
   return Array.from({ length: aantalWeken }, (_, i) => teken * (basis + (i < rest ? 1 : 0)));
 }
 
+/**
+ * Waar een week staat ten opzichte van vandaag. Een voorbije week is af, de
+ * huidige week loopt nog, een komende week is nog niet begonnen.
+ */
+export type WeekFase = "voorbij" | "huidig" | "komend";
+
 export interface WeekStand {
+  fase: WeekFase;
   /** Het vaste weekbedrag (weekpot / aantal weken). */
   basis: Centen;
-  /** Over (of tekort, negatief) uit de vorige week. */
+  /**
+   * Alleen in de huidige week: de som van wat alle voorbije weken van hun
+   * eigen weekbedrag overhielden (of tekortkwamen, negatief). Anders 0.
+   */
   doorgeschoven: Centen;
   /** basis + doorgeschoven. */
   beschikbaar: Centen;
   uitgegeven: Centen;
-  /** beschikbaar − uitgegeven; schuift door naar de volgende week. */
+  /**
+   * Het grote getal in de kop van de week: beschikbaar − uitgegeven. In een
+   * voorbije of komende week is dat gelijk aan eigenOver.
+   */
   over: Centen;
   /**
    * basis − uitgegeven: wat deze week van haar eigen weekbedrag over is,
-   * zonder doorschuiven. Dit staat in de ingeklapte weekrij.
+   * zonder doorschuiven. Bij een voorbije week is dit wat hij doorschuift.
    */
   eigenOver: Centen;
 }
 
 /**
- * Doorschuiven: wat je in een week overhoudt gaat naar de volgende week, een
- * tekort gaat er daar weer af.
+ * Doorschuiven: wat een voorbije week van haar eigen weekbedrag overhoudt (of
+ * tekortkomt) gaat naar de huidige week. Er schuift niets door van week tot
+ * week door de toekomst heen: een komende week toont alleen haar eigen
+ * weekbedrag min de uitgaven die er al in staan.
+ *
+ * `huidige` is de index van de huidige week. Is hij kleiner dan 0, dan zijn
+ * alle weken komend (de periode moet nog beginnen); is hij gelijk aan of
+ * groter dan het aantal weken, dan zijn alle weken voorbij (een afgesloten
+ * periode) en schuift er niets door.
  */
-export function schuifDoor(basis: Centen[], uitgegeven: Centen[]): WeekStand[] {
-  const standen: WeekStand[] = [];
-  let doorgeschoven = 0;
-  basis.forEach((b, i) => {
+export function schuifDoor(basis: Centen[], uitgegeven: Centen[], huidige: number): WeekStand[] {
+  const eigen = basis.map((b, i) => b - (uitgegeven[i] ?? 0));
+  const uitVoorbij = som(eigen.slice(0, Math.max(0, huidige)));
+  return basis.map((b, i) => {
+    const fase: WeekFase = i < huidige ? "voorbij" : i === huidige ? "huidig" : "komend";
     const uit = uitgegeven[i] ?? 0;
+    const doorgeschoven = fase === "huidig" ? uitVoorbij : 0;
     const beschikbaar = b + doorgeschoven;
-    const over = beschikbaar - uit;
-    standen.push({ basis: b, doorgeschoven, beschikbaar, uitgegeven: uit, over, eigenOver: b - uit });
-    doorgeschoven = over;
+    return {
+      fase,
+      basis: b,
+      doorgeschoven,
+      beschikbaar,
+      uitgegeven: uit,
+      over: beschikbaar - uit,
+      eigenOver: eigen[i]!,
+    };
   });
-  return standen;
 }
 
 export const som = (bedragen: Centen[]): Centen => bedragen.reduce((s, b) => s + b, 0);

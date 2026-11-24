@@ -19,7 +19,7 @@ export function Weken() {
   return (
     <div className="hb-weken">
       <div className="hb-kolomkop">
-        <span>samen over</span>
+        <span>over</span>
         <span>vaste lasten</span>
         <span>persoonlijk</span>
       </div>
@@ -32,7 +32,7 @@ export function Weken() {
             week={week}
             open={open === i}
             onToggle={() => setOpen(open === i ? null : i)}
-            isNu={i === nu}
+            isNu={week.fase === "huidig"}
             bewerkbaar={bewerkbaar}
           >
             {(bewerkbaar || (alleenLezen && isLopende)) && (

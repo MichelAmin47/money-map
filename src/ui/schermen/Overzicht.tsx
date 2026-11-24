@@ -1,8 +1,7 @@
-import { formatKort, vandaagISO } from "../../logica/datum";
+import { formatKort } from "../../logica/datum";
 import { formatEuro } from "../../logica/geld";
 import type { WeekPot } from "../../logica/potten";
 import { termijnLabel } from "../../logica/termijnen";
-import { weekIndexVoorDatum } from "../../logica/weken";
 import { useBeeld } from "../context";
 import { WeekBlok } from "../WeekBlok";
 
@@ -14,7 +13,7 @@ const rood = (c: number) => (c < 0 ? "hb-rood" : undefined);
  * afvinken gebeurt in de andere tabs. De cijfers komen uit berekenOverzicht.
  */
 export function Overzicht() {
-  const { periode, data, overzicht, isLopende } = useBeeld();
+  const { periode, data, overzicht } = useBeeld();
   if (!periode || !overzicht) {
     return <p className="hb-hint">Nog geen periode gestart.</p>;
   }
@@ -24,12 +23,6 @@ export function Overzicht() {
   const extra = data.uitgaven
     .filter((u) => u.pot === "extra")
     .sort((a, b) => a.datum.localeCompare(b.datum) || a.aangemaaktOp.localeCompare(b.aangemaaktOp));
-  const nu = isLopende
-    ? weekIndexVoorDatum(
-        overzicht.weken.map((w) => w.blok),
-        vandaagISO(),
-      )
-    : -1;
 
   const cijfers: [string, number, string][] = [
     ["Salaris", kern.salaris, "uit deze periode"],
@@ -154,12 +147,12 @@ export function Overzicht() {
           <h2>Alle weken</h2>
         </header>
         <div className="hb-ov-weken">
-          {overzicht.weken.map((week, i) => (
+          {overzicht.weken.map((week) => (
             <WeekBlok
               key={week.blok.start}
               week={week}
               open
-              isNu={i === nu}
+              isNu={week.fase === "huidig"}
               bewerkbaar={false}
               alleenLezen
             />

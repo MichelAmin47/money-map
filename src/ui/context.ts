@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useSyncExternalStore } from "react";
 import type { Boek, Staat } from "../data/boek";
 import type { PeriodeData } from "../data/backend";
+import { vandaagISO } from "../logica/datum";
 import { berekenOverzicht, topWinkels, type Overzicht, type Periode } from "../logica/overzicht";
 
 export const BoekContext = createContext<Boek | null>(null);
@@ -34,6 +35,8 @@ const LEEG: PeriodeData = { regels: [], uitgaven: [] };
 /** De periode die in beeld is, met alle afgeleide cijfers. */
 export function useBeeld(): Beeld {
   const s = useStaat();
+  // Vandaag hoort bij de memo: na middernacht verschuift de huidige week.
+  const vandaag = vandaagISO();
   return useMemo(() => {
     const periode = s.periodes.find((p) => p.id === s.periodeId) ?? null;
     const data = (periode && s.data[periode.id]) || LEEG;
@@ -42,13 +45,18 @@ export function useBeeld(): Beeld {
     return {
       periode,
       data,
-      overzicht: periode ? berekenOverzicht(periode, data.regels, data.uitgaven) : null,
+      overzicht: periode
+        ? berekenOverzicht(periode, data.regels, data.uitgaven, {
+            vandaag,
+            afgesloten: !isLopende,
+          })
+        : null,
       isLopende,
       bewerkbaar:
         periode != null && !alleenLezen && (isLopende || s.ontgrendeld.includes(periode.id)),
       alleenLezen,
     };
-  }, [s.periodes, s.periodeId, s.data, s.ontgrendeld, s.alleenLezen]);
+  }, [s.periodes, s.periodeId, s.data, s.ontgrendeld, s.alleenLezen, vandaag]);
 }
 
 /**

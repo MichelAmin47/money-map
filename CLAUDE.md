@@ -111,6 +111,8 @@ Een periode loopt **van salaris tot salaris**, niet per kalendermaand.
 - `weekIndexVoorDatum(blokken, datum)`: het laatste blok waarvan de start op of
   vóór de datum ligt. Een datum vóór de periode telt in blok 1, een datum erna
   in het laatste blok.
+- `huidigeWeekIndex(blokken, vandaag)`: het blok waarin vandaag valt; −1 als
+  vandaag vóór de periode ligt, het aantal blokken als vandaag erna ligt.
 - De weekindeling wordt nergens opgeslagen; hij wordt steeds uit de datums
   berekend.
 
@@ -135,26 +137,50 @@ vaste lasten.
   of zonder V). `weekpot()`.
 - De weekpot wordt gelijk over de blokken verdeeld (`verdeelOverWeken`); centen
   die niet te delen zijn gaan naar de eerste weken, zodat de som exact klopt.
-- **Doorschuiven** (`schuifDoor`): wat een week overhoudt gaat naar de volgende
-  week; een tekort gaat er daar af. Per week en per pot levert dat een
-  `WeekStand`: `basis` (weekbedrag), `doorgeschoven`, `beschikbaar`
-  (basis + doorgeschoven), `uitgegeven`, `over` (schuift door) en `eigenOver`
-  (basis − uitgegeven, zonder doorschuiven).
-- De **kop van een week** toont per kolom groot `over` ("samen over" =
-  weekbedrag − uitgaven van die week + doorgeschoven), rood als het negatief
-  is; ingeklapt alleen die regel. Dat geldt overal: Vandaag, Weken en
-  Overzicht. Een **opengeklapte week** heeft de kolomnamen boven die bedragen
-  en daaronder twee kleine, grijze regels (`Opbouw` in `WeekBlok.tsx`):
-  "weekbedrag" (`eigenOver`, het eigen weekbedrag min de uitgaven) en
-  "doorgeschoven" (`formatMetTeken`, rood als het negatief is). De regel
-  doorgeschoven staat er alleen als er in een van de kolommen iets is
-  doorgeschoven; een kolom met €0 blijft dan leeg. Daaronder staan de
-  uitgaven.
+- **Fase van een week** (`WeekFase`, ten opzichte van vandaag):
+  - **voorbij**: de einddatum ligt vóór vandaag;
+  - **huidig**: vandaag valt in de week;
+  - **komend**: de startdatum ligt na vandaag.
+
+  Bekijk je een eerdere (afgesloten) periode, dan zijn alle weken voorbij
+  (`berekenOverzicht(…, { vandaag, afgesloten: true })`). In de lopende periode
+  na de einddatum zijn ook alle weken voorbij; vóór de startdatum zijn ze
+  allemaal komend.
+- **Doorschuiven** (`schuifDoor(basis, uitgegeven, huidige)`) gebeurt **alleen
+  vanuit voorbije weken naar de huidige week**, niet van week tot week door de
+  toekomst heen. Een voorbije week schuift zijn eigen resultaat door
+  (weekbedrag − uitgaven van die week, een tekort is negatief); de huidige
+  week krijgt de som daarvan. Per week en per pot levert dat een `WeekStand`:
+  `fase`, `basis` (weekbedrag), `doorgeschoven` (alleen in de huidige week,
+  anders 0), `beschikbaar` (basis + doorgeschoven), `uitgegeven`, `over` en
+  `eigenOver` (basis − uitgegeven).
+- De **kop van een week** toont per kolom groot `over`, rood als het negatief
+  is; ingeklapt alleen die regel:
+  - voorbije week: het eigen resultaat (weekbedrag − uitgaven van die week),
+    zonder doorgeschoven bedrag. Dit is ook wat die week doorschuift;
+  - huidige week: het eigen resultaat + de som van de eigen resultaten van
+    alle voorbije weken in de periode;
+  - komende week: het eigen resultaat (weekbedrag − de uitgaven die er al in
+    staan), zonder doorgeschoven bedrag.
+
+  Dat geldt overal: Vandaag, Weken en Overzicht. Een **opengeklapte week**
+  heeft de kolomnamen boven die bedragen en daaronder kleine, grijze regels
+  (`Opbouw` in `WeekBlok.tsx`): "weekbedrag" (`eigenOver`) en, alleen in de
+  huidige week en alleen als er in een van de kolommen iets is doorgeschoven,
+  "doorgeschoven" (`formatMetTeken`, rood als het negatief is); een kolom met
+  €0 blijft dan leeg. Daaronder staan de uitgaven. De kolomkop boven de lijst
+  op Weken heet "Over".
+- De markering "deze week" en de rand op Overzicht volgen uit `fase === "huidig"`.
 - Uitgaven uit de pot **Extra tellen niet mee** in de weekbedragen.
   Extra = salaris × percentage − alle extra-uitgaven van de periode.
-- `berekenOverzicht(periode, regels, uitgaven)` in `overzicht.ts` leidt alle
-  cijfers van één periode af: potten, weken, status van de vaste lasten en het
-  saldo. De UI rekent zelf niets uit.
+- `berekenOverzicht(periode, regels, uitgaven, { vandaag, afgesloten })` in
+  `overzicht.ts` leidt alle cijfers van één periode af: potten, weken (met hun
+  fase), status van de vaste lasten en het saldo. De UI rekent zelf niets uit;
+  `useBeeld()` geeft `vandaagISO()` mee en `afgesloten` voor elke periode die
+  niet de lopende is.
+- Wat er **per pot** over is (`overzicht.vast.over`, de potten op Vandaag en
+  Overzicht) is altijd weekpot − alle uitgaven van de periode, los van de
+  fases.
 
 ### Vaste lasten, de V en termijnen (`termijnen.ts`)
 
@@ -278,7 +304,7 @@ src/
     geld.ts        centen, formatEuro, formatMetTeken, formatInvoer, parseBedrag, parseSaldo
     datum.ts       ISO-datums ("2026-11-13"), rekenen in UTC, formatKort/formatMetDag/formatMoment
     potten.ts      verdeling, weekpot, verdeelOverWeken, schuifDoor
-    weken.ts       weekblokken, weekIndexVoorDatum
+    weken.ts       weekblokken, weekIndexVoorDatum, huidigeWeekIndex
     termijnen.ts   VasteLast, PeriodeRegel, bouwNieuwePeriode, termijnLabel
     overzicht.ts   Periode, Uitgave, berekenOverzicht, berekenSaldo,
                    berekenKerncijfers, topWinkels
@@ -602,8 +628,9 @@ Papier en inkt: een rustig kasboek, geen dashboard. Alle stijl staat in
 
 ## Tests
 
-- `src/logica/logica.test.ts`: bedragen, potten, weekpot, doorschuiven,
-  weekindeling, termijnen, overzicht, snelknoppen, import.
+- `src/logica/logica.test.ts`: bedragen, potten, weekpot, doorschuiven
+  (voorbije, huidige en komende weken; overschrijding en overschot in het
+  verleden; afgesloten periode), weekindeling, termijnen, overzicht, snelknoppen, import.
 - `src/logica/saldo.test.ts`, `src/logica/groepen.test.ts`,
   `src/logica/kerncijfers.test.ts`.
 - `src/data/boek.test.ts`: de store met een nep-backend (import, periodes,
@@ -657,7 +684,7 @@ Papier en inkt: een rustig kasboek, geen dashboard. Alle stijl staat in
 ### Tweede ronde (na het eerste dagelijkse gebruik)
 
 - **Ingeklapte weekrij toont het eigen weekbedrag min de uitgaven**, niet
-  "beschikbaar" (teruggedraaid in de vijfde ronde). Met het doorgeschoven bedrag erbij was niet te zien hoe een
+  "beschikbaar" (teruggedraaid in de vijfde ronde, zie ook de zesde ronde). Met het doorgeschoven bedrag erbij was niet te zien hoe een
   week zelf was gegaan. Het doorschuiven is niet veranderd; `eigenOver` is een
   extra veld naast de bestaande.
 - **Eerste en laatste blok lopen tot de grenzen van de periode**, in
@@ -763,12 +790,40 @@ app bleef eindeloos hangen bij het opstarten.
   uitgeven. Met een negatief doorgeschoven bedrag stond er groot € 68,94
   terwijl er maar € 58,06 over was. Het eigen weekbedrag en het doorgeschoven
   bedrag staan opengeklapt klein en grijs eronder. De kolomkop op Weken heet
-  daarom "samen over".
+  daarom "samen over". (Bijgesteld in de zesde ronde.)
 - **Weken op Overzicht als losse kaarten**, met een donkere kop en de huidige
   week omrand in stempelrood: ze liepen in elkaar over, gescheiden door
   dezelfde dunne lijn als tussen de uitgaven.
 - **Eén notatie voor negatieve bedragen**: "− € 10,88" overal, ook in
   `formatEuro`, gelijk aan `formatMetTeken`.
+
+### Zesde ronde (doorschuiven alleen naar de huidige week)
+
+Hoe het grote getal in de kop van een week is gegroeid:
+
+1. **Ronde 2: zonder doorschuiven.** De ingeklapte rij toonde het eigen
+   weekbedrag min de uitgaven, zodat te zien was hoe een week zelf ging.
+2. **Ronde 5: met doorschuiven** ("samen over"), omdat dat is wat er echt nog
+   uit te geven valt. Het doorschuiven liep van week tot week door, ook door de
+   weken die nog moesten komen.
+3. **Nu: doorschuiven alleen vanuit voorbije weken naar de huidige week.** In
+   de praktijk stapelde het doorschuiven zich op bij de komende weken: week 3
+   toonde € 145,81 (€ 87,75 eigen + € 58,06 uit de lopende week 2), week 4 en 5
+   nog meer. Dat klopt niet, want de lopende week is nog niet af; wat daar nu
+   over is, kan deze week nog worden uitgegeven. Daarom:
+   - een voorbije week toont zijn eigen resultaat, en dat is ook wat hij
+     doorschuift;
+   - de huidige week toont "samen over": eigen resultaat + alle voorbije weken;
+   - een komende week toont alleen zijn eigen weekbedrag min wat er al in staat.
+
+   De regel "doorgeschoven" staat daardoor alleen nog in de huidige week, en de
+   kolomkop op Weken heet "Over" in plaats van "samen over". In een afgesloten
+   periode zijn alle weken voorbij en wordt er niets doorgeschoven.
+- **De fase in de rekenlogica, niet in de UI**: `schuifDoor` krijgt de index
+  van de huidige week, `berekenOverzicht` krijgt de datum van vandaag. Zo
+  rekenen Vandaag, Weken en Overzicht hetzelfde, en is het met tests vast te
+  leggen. Vandaag zit in de memo van `useBeeld()`, zodat na middernacht de
+  volgende week de huidige wordt.
 
 ## Bekende beperkingen
 
@@ -795,6 +850,10 @@ app bleef eindeloos hangen bij het opstarten.
   alleen op het scherm Extra.
 - **De startdag van de week wijzigen** verandert de blokken van de lopende
   periode, en daarmee de weekbedragen.
+- **Het doorschuiven hangt af van de datum op het toestel.** Een week wordt
+  "voorbij" op de dag na zijn einddatum; pas dan schuift hij door. Zolang de
+  app open blijft over middernacht, gebeurt dat bij de volgende wijziging of
+  bij opnieuw laden.
 - **"In termijnen" in het uitgaveformulier** begint bij 2 termijnen en komt
   altijd in Persoonlijk. Een eenmalige post (1/1) of een termijnpost in Vaste
   lasten maak je op het scherm Vaste lasten.

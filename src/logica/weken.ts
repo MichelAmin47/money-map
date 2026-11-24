@@ -64,3 +64,17 @@ export function weekIndexVoorDatum(blokken: Weekblok[], datum: ISODatum): number
   }
   return 0;
 }
+
+/**
+ * De index van de huidige week: het blok waarin vandaag valt. Ligt vandaag
+ * vóór de periode, dan −1 (alle weken komen nog); ligt vandaag erna, dan het
+ * aantal blokken (alle weken zijn voorbij).
+ */
+export function huidigeWeekIndex(blokken: Weekblok[], vandaag: ISODatum): number {
+  const eerste = blokken[0];
+  const laatste = blokken.at(-1);
+  if (!eerste || !laatste) return -1;
+  if (vandaag < eerste.start) return -1;
+  if (vandaag > laatste.eind) return blokken.length;
+  return weekIndexVoorDatum(blokken, vandaag);
+}
