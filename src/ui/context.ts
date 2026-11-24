@@ -13,7 +13,7 @@ export function useBoek(): Boek {
 
 export function useStaat(): Staat {
   const boek = useBoek();
-  return useSyncExternalStore(boek.abonneer, boek.momentopname);
+  return useSyncExternalStore(boek.abonneer, boek.staatNu);
 }
 
 export interface Beeld {
@@ -25,6 +25,8 @@ export interface Beeld {
   isLopende: boolean;
   /** Uitgaven en vinkjes mogen aangepast worden. */
   bewerkbaar: boolean;
+  /** Storing: de momentopname staat in beeld en alles is alleen lezen. */
+  alleenLezen: boolean;
 }
 
 const LEEG: PeriodeData = { regels: [], uitgaven: [] };
@@ -36,14 +38,17 @@ export function useBeeld(): Beeld {
     const periode = s.periodes.find((p) => p.id === s.periodeId) ?? null;
     const data = (periode && s.data[periode.id]) || LEEG;
     const isLopende = periode != null && periode.id === s.periodes.at(-1)?.id;
+    const alleenLezen = s.alleenLezen != null;
     return {
       periode,
       data,
       overzicht: periode ? berekenOverzicht(periode, data.regels, data.uitgaven) : null,
       isLopende,
-      bewerkbaar: periode != null && (isLopende || s.ontgrendeld.includes(periode.id)),
+      bewerkbaar:
+        periode != null && !alleenLezen && (isLopende || s.ontgrendeld.includes(periode.id)),
+      alleenLezen,
     };
-  }, [s.periodes, s.periodeId, s.data, s.ontgrendeld]);
+  }, [s.periodes, s.periodeId, s.data, s.ontgrendeld, s.alleenLezen]);
 }
 
 /**

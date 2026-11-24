@@ -5,12 +5,23 @@ import { STANDAARD_VERDELING, type Pot, type WeekPot } from "../logica/potten";
 import { importSleutel, type Startdata } from "../logica/startdata";
 import { bouwNieuwePeriode, type PeriodeRegel, type VasteLast } from "../logica/termijnen";
 import { WEEKDAGEN } from "../logica/datum";
-import type { Backend, Instellingen, PeriodeData } from "./backend";
+import type { Backend, Basis, Instellingen, PeriodeData } from "./backend";
+import { bewaarMomentopname, leesMomentopname, type Opslag } from "./momentopname";
+import { isStoring, metTijdslimiet, TIJDSLIMIET_MS } from "./tijdslimiet";
 import { Wachtrij, type OpslagStatus } from "./wachtrij";
 
 export interface Staat {
   fase: "laden" | "klaar" | "fout";
   laadFout: string | null;
+  /** De fout bij het laden was een storing (geen antwoord of geen verbinding). */
+  laadStoring: boolean;
+  /**
+   * Gezet als het laden niet lukte en de app de momentopname toont. Alles is
+   * dan alleen lezen en er gaat niets naar de server.
+   */
+  alleenLezen: { bewaardOp: string } | null;
+  /** Een nieuwe poging om te laden loopt (op de achtergrond of na een tik). */
+  opnieuwBezig: boolean;
   instellingen: Instellingen;
   vasteLasten: VasteLast[];
   /** Oplopend op startdatum; de laatste is de lopende periode. */
@@ -47,6 +58,15 @@ export const STANDAARD_INSTELLINGEN: Instellingen = {
   winkels: [],
 };
 
+export interface BoekOpties {
+  /** De user_id; de momentopname hoort bij deze gebruiker. */
+  gebruiker?: string;
+  /** Waar de momentopname staat (localStorage). Zonder opslag geen momentopname. */
+  opslag?: Opslag | null;
+  /** Hoe lang laden mag duren voordat het als storing telt. */
+  tijdslimiet?: number;
+}
+
 const nieuwId = (): string => crypto.randomUUID();
 
 const LEEG: PeriodeData = { regels: [], uitgaven: [] };
@@ -59,6 +79,9 @@ export class Boek {
   private staat: Staat = {
     fase: "laden",
     laadFout: null,
+    laadStoring: false,
+    alleenLezen: null,
+    opnieuwBezig: false,
     instellingen: STANDAARD_INSTELLINGEN,
     vasteLasten: [],
     periodes: [],
@@ -70,9 +93,24 @@ export class Boek {
     opslag: { wachtend: 0, fout: null },
   };
   private luisteraars = new Set<() => void>();
-  private wachtrij = new Wachtrij((opslag) => this.zet({ opslag }));
+  private wachtrij = new Wachtrij((opslag) => {
+    this.zet({ opslag });
+    // Alles is opgeslagen: de toestand is gelijk aan die op de server.
+    if (opslag.wachtend === 0 && !opslag.fout) this.bewaarMomentopname();
+  });
+  private laadPoging = 0;
+  private gebruiker: string | null;
+  private opslag: Opslag | null;
+  private tijdslimiet: number;
 
-  constructor(private backend: Backend) {}
+  constructor(
+    private backend: Backend,
+    opties: BoekOpties = {},
+  ) {
+    this.gebruiker = opties.gebruiker ?? null;
+    this.opslag = opties.opslag ?? null;
+    this.tijdslimiet = opties.tijdslimiet ?? TIJDSLIMIET_MS;
+  }
 
   // --- koppeling met React (useSyncExternalStore) --------------------------
 
@@ -81,7 +119,7 @@ export class Boek {
     return () => this.luisteraars.delete(fn);
   };
 
-  momentopname = (): Staat => this.staat;
+  staatNu = (): Staat => this.staat;
 
   private zet(deel: Partial<Staat>): void {
     this.staat = { ...this.staat, ...deel };
@@ -94,7 +132,34 @@ export class Boek {
   }
 
   private bewaar(taak: (b: Backend) => Promise<void>): void {
+    // Vangnet: in de alleen-lezen-weergave komt er niets in de wachtrij.
+    if (!this.magSchrijven) return;
     this.wachtrij.voegToe(() => taak(this.backend));
+  }
+
+  /** Wijzigen mag alleen met verse gegevens, niet in de alleen-lezen-weergave. */
+  get magSchrijven(): boolean {
+    return this.staat.fase === "klaar" && !this.staat.alleenLezen;
+  }
+
+  /**
+   * Bewaart de huidige gegevens als momentopname, maar alleen als ze gelijk
+   * zijn aan die op de server: geladen, niet uit de momentopname zelf, en
+   * zonder wachtende wijzigingen.
+   */
+  private bewaarMomentopname(): void {
+    const s = this.staat;
+    if (!this.gebruiker || !this.opslag) return;
+    if (!this.magSchrijven || this.wachtrij.status.wachtend > 0) return;
+    bewaarMomentopname(this.opslag, {
+      versie: 1,
+      gebruiker: this.gebruiker,
+      bewaardOp: new Date().toISOString(),
+      instellingen: s.instellingen,
+      vasteLasten: s.vasteLasten,
+      periodes: s.periodes,
+      data: s.data,
+    });
   }
 
   // --- afgeleiden ----------------------------------------------------------
@@ -105,15 +170,30 @@ export class Boek {
 
   // --- laden ---------------------------------------------------------------
 
-  async laad(): Promise<void> {
-    this.zet({ fase: "laden", laadFout: null });
+  /**
+   * Haalt de basis en de lopende periode op, met een tijdslimiet. Lukt dat
+   * niet door een storing en is er een momentopname van deze gebruiker, dan
+   * toont de app die alleen-lezen. Met `stil` blijft het huidige scherm staan
+   * tijdens de poging (opnieuw proberen, ook op de achtergrond).
+   */
+  async laad({ stil = false }: { stil?: boolean } = {}): Promise<void> {
+    // Wachtende wijzigingen gaan nooit verloren door opnieuw te laden.
+    if (this.wachtrij.status.wachtend > 0) return;
+    if (stil && this.staat.opnieuwBezig) return;
+    const poging = ++this.laadPoging;
+    const vorigePeriode = this.staat.periodeId;
+    if (stil) this.zet({ opnieuwBezig: true });
+    else this.zet({ fase: "laden", laadFout: null, laadStoring: false });
     try {
-      const basis = await this.backend.laadBasis();
+      const { basis, data } = await metTijdslimiet(this.haalOp(), this.tijdslimiet);
+      if (poging !== this.laadPoging) return;
       const lopende = basis.periodes.at(-1) ?? null;
-      const data: Record<string, PeriodeData> = {};
-      if (lopende) data[lopende.id] = await this.backend.laadPeriode(lopende.id);
       this.zet({
         fase: "klaar",
+        laadFout: null,
+        laadStoring: false,
+        alleenLezen: null,
+        opnieuwBezig: false,
         instellingen: basis.instellingen ?? STANDAARD_INSTELLINGEN,
         vasteLasten: basis.vasteLasten,
         periodes: basis.periodes,
@@ -122,18 +202,65 @@ export class Boek {
         recent: basis.recent,
         ontgrendeld: [],
       });
+      this.bewaarMomentopname();
+      // Na herstel verder in de periode die in beeld was.
+      if (vorigePeriode && vorigePeriode !== lopende?.id) {
+        if (basis.periodes.some((p) => p.id === vorigePeriode)) void this.kiesPeriode(vorigePeriode);
+      }
     } catch (e) {
-      this.zet({ fase: "fout", laadFout: e instanceof Error ? e.message : String(e) });
+      if (poging !== this.laadPoging) return;
+      const storing = isStoring(e);
+      if (this.staat.alleenLezen) {
+        // Nog steeds geen verbinding: de momentopname blijft in beeld.
+        this.zet({ opnieuwBezig: false });
+        return;
+      }
+      const kopie =
+        storing && this.gebruiker ? leesMomentopname(this.opslag, this.gebruiker) : null;
+      if (kopie) {
+        this.zet({
+          fase: "klaar",
+          laadFout: null,
+          laadStoring: false,
+          alleenLezen: { bewaardOp: kopie.bewaardOp },
+          opnieuwBezig: false,
+          instellingen: kopie.instellingen,
+          vasteLasten: kopie.vasteLasten,
+          periodes: kopie.periodes,
+          periodeId: kopie.periodes.at(-1)?.id ?? null,
+          data: kopie.data,
+          recent: [],
+          ontgrendeld: [],
+        });
+        return;
+      }
+      this.zet({
+        fase: "fout",
+        laadFout: e instanceof Error ? e.message : String(e),
+        laadStoring: storing,
+        opnieuwBezig: false,
+      });
     }
   }
 
+  private async haalOp(): Promise<{ basis: Basis; data: Record<string, PeriodeData> }> {
+    const basis = await this.backend.laadBasis();
+    const lopende = basis.periodes.at(-1) ?? null;
+    const data: Record<string, PeriodeData> = {};
+    if (lopende) data[lopende.id] = await this.backend.laadPeriode(lopende.id);
+    return { basis, data };
+  }
+
   async kiesPeriode(id: string): Promise<void> {
+    // Alleen lezen: alleen periodes die in de momentopname zitten.
+    if (this.staat.alleenLezen && !this.staat.data[id]) return;
     this.zet({ periodeId: id });
     if (this.staat.data[id]) return;
     this.zet({ periodeLaden: true });
     try {
       const d = await this.backend.laadPeriode(id);
       this.zet({ data: { ...this.staat.data, [id]: d }, periodeLaden: false });
+      this.bewaarMomentopname();
     } catch (e) {
       this.zet({
         periodeLaden: false,
@@ -147,6 +274,7 @@ export class Boek {
   }
 
   ontgrendel(periodeId: string): void {
+    if (!this.magSchrijven) return;
     this.zet({ ontgrendeld: [...this.staat.ontgrendeld, periodeId] });
   }
 
@@ -156,6 +284,7 @@ export class Boek {
 
   /** Bewaart de instellingen; ze gelden ook meteen voor de lopende periode. */
   bewaarInstellingen(nieuw: Omit<Instellingen, "winkels">): void {
+    if (!this.magSchrijven) return;
     const instellingen: Instellingen = { ...nieuw, winkels: this.staat.instellingen.winkels };
     this.zet({ instellingen });
     this.bewaar((b) => b.bewaarInstellingen(instellingen));
@@ -190,6 +319,7 @@ export class Boek {
 
   /** Past het startsaldo van een periode aan (het saldo in de kop rekent ermee). */
   wijzigStartsaldo(periodeId: string, startsaldo: Centen): void {
+    if (!this.magSchrijven) return;
     const oud = this.staat.periodes.find((p) => p.id === periodeId);
     if (!oud || oud.startsaldo === startsaldo) return;
     const periode: Periode = { ...oud, startsaldo };
@@ -207,6 +337,7 @@ export class Boek {
     volgendeSalarisdatum: ISODatum,
     startsaldo: Centen = this.eindsaldoLopende(),
   ): string | null {
+    if (!this.magSchrijven) return "Geen verbinding: je kunt nu alleen kijken.";
     const vorige = this.lopende;
     if (volgendeSalarisdatum <= startdatum) {
       return "De volgende salarisdatum moet na de startdatum liggen.";
@@ -260,6 +391,7 @@ export class Boek {
   // --- uitgaven ------------------------------------------------------------
 
   voegUitgaveToe(periodeId: string, invoer: UitgaveInvoer): void {
+    if (!this.magSchrijven) return;
     const uitgave: Uitgave = {
       ...invoer,
       id: nieuwId(),
@@ -274,6 +406,7 @@ export class Boek {
   }
 
   wijzigUitgave(uitgave: Uitgave): void {
+    if (!this.magSchrijven) return;
     this.zetData(uitgave.periodeId, (d) => ({
       ...d,
       uitgaven: d.uitgaven.map((u) => (u.id === uitgave.id ? uitgave : u)),
@@ -282,6 +415,7 @@ export class Boek {
   }
 
   verwijderUitgave(uitgave: Uitgave): void {
+    if (!this.magSchrijven) return;
     this.zetData(uitgave.periodeId, (d) => ({
       ...d,
       uitgaven: d.uitgaven.filter((u) => u.id !== uitgave.id),
@@ -294,6 +428,7 @@ export class Boek {
    * eerste termijn telt in de lopende periode mee en staat meteen op betaald.
    */
   voegTermijnAankoopToe(omschrijving: string, bedragPerTermijn: Centen, aantal: number): void {
+    if (!this.magSchrijven) return;
     this.voegVasteLastToe(
       {
         naam: omschrijving,
@@ -329,6 +464,7 @@ export class Boek {
 
   /** Nieuwe vaste last; komt ook meteen in de lopende periode te staan. */
   voegVasteLastToe(invoer: VasteLastInvoer, betaald = false): void {
+    if (!this.magSchrijven) return;
     const last: VasteLast = {
       ...invoer,
       id: nieuwId(),
@@ -347,6 +483,7 @@ export class Boek {
 
   /** Past de standaardpost aan, en de regel in de lopende periode. */
   wijzigVasteLast(id: string, invoer: VasteLastInvoer): void {
+    if (!this.magSchrijven) return;
     const oud = this.staat.vasteLasten.find((v) => v.id === id);
     if (!oud) return;
     const last: VasteLast = { ...oud, ...invoer };
@@ -382,6 +519,7 @@ export class Boek {
 
   /** Verwijdert de standaardpost en de regel in de lopende periode. Oudere periodes blijven staan. */
   verwijderVasteLast(id: string): void {
+    if (!this.magSchrijven) return;
     this.zet({ vasteLasten: this.staat.vasteLasten.filter((v) => v.id !== id) });
     const lopende = this.lopende;
     const regel = lopende
@@ -401,6 +539,7 @@ export class Boek {
 
   /** Vinkje of bedrag van één regel in één periode. */
   wijzigRegel(regel: PeriodeRegel): void {
+    if (!this.magSchrijven) return;
     this.zetData(regel.periodeId, (d) => ({
       ...d,
       regels: d.regels.map((r) => (r.id === regel.id ? regel : r)),
@@ -417,6 +556,7 @@ export class Boek {
    * lasten weg (ook uit de lopende periode; oudere periodes blijven staan).
    */
   importeer(start: Startdata, vervangen: boolean): void {
+    if (!this.magSchrijven) return;
     const lopende = this.lopende;
     const oudeRegels = lopende ? (this.staat.data[lopende.id]?.regels ?? []) : [];
     const oudeLasten = this.staat.vasteLasten;
@@ -501,6 +641,7 @@ export class Boek {
 
   /** Alles als JSON: het importformaat, aangevuld met de periodes als back-up. */
   async exporteer(): Promise<unknown> {
+    if (this.staat.alleenLezen) throw new Error("Geen verbinding");
     const s = this.staat;
     const periodes = [];
     for (const p of s.periodes) {

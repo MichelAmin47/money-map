@@ -6,7 +6,7 @@ import { UitgaveInvoer } from "../UitgaveInvoer";
 import { WeekBlok } from "../WeekBlok";
 
 export function Weken() {
-  const { periode, overzicht, isLopende, bewerkbaar } = useBeeld();
+  const { periode, overzicht, isLopende, bewerkbaar, alleenLezen } = useBeeld();
   const vandaag = vandaagISO();
   const blokken = overzicht?.weken.map((w) => w.blok) ?? [];
   const nu = isLopende ? weekIndexVoorDatum(blokken, vandaag) : -1;
@@ -19,7 +19,7 @@ export function Weken() {
   return (
     <div className="hb-weken">
       <div className="hb-kolomkop">
-        <span>over van de week</span>
+        <span>samen over</span>
         <span>vaste lasten</span>
         <span>persoonlijk</span>
       </div>
@@ -35,7 +35,7 @@ export function Weken() {
             isNu={i === nu}
             bewerkbaar={bewerkbaar}
           >
-            {bewerkbaar && (
+            {(bewerkbaar || (alleenLezen && isLopende)) && (
               <UitgaveInvoer
                 key={datum}
                 periodeId={periode.id}

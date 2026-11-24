@@ -12,8 +12,15 @@ const euroFormaat = new Intl.NumberFormat("nl-NL", {
   minimumFractionDigits: 2,
 });
 
-export const formatEuro = (centen: Centen): string =>
-  euroFormaat.format(naarEuro(centen || 0));
+/**
+ * "€ 1.234,56". Negatief krijgt overal een los minteken vooraan: "− € 10,88"
+ * (Intl zou "€ -10,88" geven).
+ */
+export const formatEuro = (centen: Centen): string => {
+  const c = centen || 0;
+  const tekst = euroFormaat.format(naarEuro(Math.abs(c)));
+  return c < 0 ? `− ${tekst}` : tekst;
+};
 
 /**
  * Bedrag met een los teken ervoor, voor een verschil of een doorgeschoven

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dagVanWeek, plusDagen, plusMaand } from "./datum";
+import { dagVanWeek, formatMoment, plusDagen, plusMaand } from "./datum";
 import { formatEuro, formatInvoer, naarCenten, parseBedrag } from "./geld";
 import { berekenOverzicht, topWinkels, type Periode, type Uitgave } from "./overzicht";
 import {
@@ -44,6 +44,11 @@ describe("bedragen invoeren en tonen", () => {
     expect(formatEuro(43870).replace(/\s/g, " ")).toBe("€ 438,70");
     expect(formatEuro(472049).replace(/\s/g, " ")).toBe("€ 4.720,49");
     expect(formatInvoer(1250)).toBe("12,50");
+  });
+  it("zet bij een negatief bedrag het minteken vooraan", () => {
+    expect(formatEuro(-1088).replace(/\s/g, " ")).toBe("− € 10,88");
+    expect(formatEuro(-123456).replace(/\s/g, " ")).toBe("− € 1.234,56");
+    expect(formatEuro(-0).replace(/\s/g, " ")).toBe("€ 0,00");
   });
 });
 
@@ -522,5 +527,12 @@ describe("startdata importeren", () => {
         vasteLasten: [{ naam: "X", bedrag: 1, pot: "vast", termijn: { huidig: 9, totaal: 8 } }],
       }),
     ).toThrow(/termijn/);
+  });
+});
+
+describe("formatMoment", () => {
+  it("toont dag, datum en tijd in de lokale tijd", () => {
+    expect(formatMoment(new Date(2026, 10, 21, 11, 12))).toBe("za 21 nov 11:12");
+    expect(formatMoment(new Date(2026, 0, 5, 9, 3))).toBe("ma 5 jan 09:03");
   });
 });

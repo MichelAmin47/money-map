@@ -74,3 +74,10 @@ export function formatMetDag(iso: ISODatum): string {
 }
 
 export const jaarVan = (iso: ISODatum): number => naarUTC(iso).getUTCFullYear();
+
+/** "za 21 nov 11:12", in de lokale tijd: het moment waarop iets bewaard is. */
+export function formatMoment(d: Date): string {
+  const uu = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${WEEKDAGEN[d.getDay()]!.slice(0, 2)} ${d.getDate()} ${MAAND_KORT[d.getMonth()]} ${uu}:${mm}`;
+}
