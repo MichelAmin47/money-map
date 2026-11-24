@@ -68,6 +68,7 @@ describe("saldo", () => {
         { ...basis, datum: "2026-11-20", bedrag: 2000, pot: "persoonlijk" },
         { ...basis, datum: "2026-12-01", bedrag: 4000, pot: "extra" },
       ],
+      { vandaag: "2026-11-24" },
     );
     expect(o.saldo.saldo).toBe(1500 + 300000 - 7000);
   });

@@ -8,11 +8,12 @@ import {
   weekpot,
   type Pot,
   type Verdeling,
+  type WeekFase,
   type WeekPot,
   type WeekStand,
 } from "./potten";
 import type { PeriodeRegel } from "./termijnen";
-import { weekblokken, weekIndexVoorDatum, type Weekblok } from "./weken";
+import { huidigeWeekIndex, weekblokken, weekIndexVoorDatum, type Weekblok } from "./weken";
 
 export interface Periode {
   id: string;
@@ -39,6 +40,8 @@ export interface Uitgave {
 
 export interface WeekOverzicht {
   blok: Weekblok;
+  /** Voorbij, huidig of komend, ten opzichte van vandaag. */
+  fase: WeekFase;
   vast: WeekStand;
   persoonlijk: WeekStand;
   /** Alle uitgaven met een datum in dit blok, ook die uit de pot Extra. */
@@ -132,14 +135,23 @@ export interface Overzicht {
   kern: Kerncijfers;
 }
 
+export interface Peildatum {
+  /** De datum van vandaag (lokaal), voor voorbij / huidig / komend. */
+  vandaag: ISODatum;
+  /** Een eerdere (afgesloten) periode: alle weken zijn voorbij. */
+  afgesloten?: boolean;
+}
+
 /** Alle cijfers van één periode, afgeleid uit de ruwe gegevens. */
 export function berekenOverzicht(
   periode: Periode,
   regels: PeriodeRegel[],
   uitgaven: Uitgave[],
+  peil: Peildatum,
 ): Overzicht {
   const potten = verdeelPotten(periode.salaris, periode.verdeling);
   const blokken = weekblokken(periode.startdatum, periode.einddatum, periode.weekStartDag);
+  const huidige = peil.afgesloten ? blokken.length : huidigeWeekIndex(blokken, peil.vandaag);
 
   const perWeek: Uitgave[][] = blokken.map(() => []);
   for (const u of uitgaven) {
@@ -154,7 +166,7 @@ export function berekenOverzicht(
       som(lijst.filter((u) => u.pot === pot).map((u) => u.bedrag)),
     );
     const uitgegeven = som(uitgegevenPerWeek);
-    const standen = schuifDoor(verdeelOverWeken(wp, blokken.length), uitgegevenPerWeek);
+    const standen = schuifDoor(verdeelOverWeken(wp, blokken.length), uitgegevenPerWeek, huidige);
     const overzicht: PotOverzicht = {
       budget: potten[pot],
       vasteLasten,
@@ -180,6 +192,7 @@ export function berekenOverzicht(
     extra: { budget: potten.extra, uitgegeven: extraUit, over: potten.extra - extraUit },
     weken: blokken.map((blok, i) => ({
       blok,
+      fase: vast.standen[i]!.fase,
       vast: vast.standen[i]!,
       persoonlijk: persoonlijk.standen[i]!,
       uitgaven: sorteer(perWeek[i]!),

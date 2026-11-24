@@ -13,7 +13,7 @@ import {
 } from "./potten";
 import { ImportFout, leesStartdata } from "./startdata";
 import { bouwNieuwePeriode, termijnLabel, type PeriodeRegel, type VasteLast } from "./termijnen";
-import { weekblokken, weekIndexVoorDatum } from "./weken";
+import { huidigeWeekIndex, weekblokken, weekIndexVoorDatum } from "./weken";
 
 const ZATERDAG = 6;
 const MAANDAG = 1;
@@ -98,39 +98,52 @@ describe("weekpot", () => {
 });
 
 describe("doorschuiven per week", () => {
-  it("schuift door wat over is", () => {
-    const s = schuifDoor([10000, 10000, 10000], [6000, 0, 0]);
-    expect(s[0]).toMatchObject({ doorgeschoven: 0, beschikbaar: 10000, over: 4000 });
-    expect(s[1]).toMatchObject({ doorgeschoven: 4000, beschikbaar: 14000, over: 14000 });
-    expect(s[2]).toMatchObject({ doorgeschoven: 14000, beschikbaar: 24000 });
+  it("schuift wat de voorbije weken overhielden door naar de huidige week", () => {
+    // Week 1 en 2 zijn voorbij, week 3 is de huidige.
+    const s = schuifDoor([10000, 10000, 10000, 10000], [6000, 13000, 2000, 500], 2);
+    expect(s.map((w) => w.fase)).toEqual(["voorbij", "voorbij", "huidig", "komend"]);
+    expect(s.map((w) => w.eigenOver)).toEqual([4000, -3000, 8000, 9500]);
+    // De huidige week krijgt de som van de eigen resultaten van de voorbije weken.
+    expect(s[2]).toMatchObject({ doorgeschoven: 1000, beschikbaar: 11000, over: 9000 });
   });
-  it("eigenOver is het weekbedrag min de uitgaven van die week, zonder doorschuiven", () => {
-    const s = schuifDoor([10000, 10000, 10000], [6000, 13000, -500]);
-    expect(s.map((w) => w.eigenOver)).toEqual([4000, -3000, 10500]);
-    // Het doorschuiven zelf verandert er niet door.
-    expect(s.map((w) => w.beschikbaar)).toEqual([10000, 14000, 11000]);
-    expect(s.map((w) => w.over)).toEqual([4000, 1000, 11500]);
+  it("voorbije en komende weken tonen alleen hun eigen resultaat", () => {
+    const s = schuifDoor([10000, 10000, 10000, 10000], [6000, 13000, 2000, 500], 2);
+    for (const i of [0, 1, 3]) {
+      expect(s[i]!.doorgeschoven).toBe(0);
+      expect(s[i]!.beschikbaar).toBe(10000);
+      expect(s[i]!.over).toBe(s[i]!.eigenOver);
+    }
   });
-  it("trekt een overschrijding af van de volgende week", () => {
-    const s = schuifDoor([10000, 10000, 10000], [13000, 2000, 0]);
+  it("trekt een overschrijding in het verleden af van de huidige week", () => {
+    const s = schuifDoor([10000, 10000, 10000], [13000, 2000, 0], 1);
     expect(s[0]!.over).toBe(-3000);
     expect(s[1]).toMatchObject({ doorgeschoven: -3000, beschikbaar: 7000, over: 5000 });
-    expect(s[2]!.beschikbaar).toBe(15000);
+    expect(s[2]).toMatchObject({ doorgeschoven: 0, beschikbaar: 10000, over: 10000 });
   });
-  it("kan meerdere weken achter elkaar negatief staan", () => {
-    const s = schuifDoor([5000, 5000, 5000], [20000, 0, 0]);
-    expect(s.map((w) => w.beschikbaar)).toEqual([5000, -10000, -5000]);
-    expect(s[2]!.over).toBe(-5000);
-  });
-  it("ontvangen geld (negatief) maakt de week ruimer", () => {
-    const s = schuifDoor([10000, 10000], [-2500, 0]);
+  it("ontvangen geld (negatief) in een voorbije week maakt de huidige week ruimer", () => {
+    const s = schuifDoor([10000, 10000], [-2500, 0], 1);
     expect(s[0]!.over).toBe(12500);
     expect(s[1]!.beschikbaar).toBe(22500);
   });
-  it("de laatste 'over' is de weekpot min alle uitgaven", () => {
+  it("in de eerste week schuift er niets door", () => {
+    const s = schuifDoor([10000, 10000], [3000, 0], 0);
+    expect(s[0]).toMatchObject({ fase: "huidig", doorgeschoven: 0, over: 7000 });
+    expect(s[1]).toMatchObject({ fase: "komend", doorgeschoven: 0, over: 10000 });
+  });
+  it("afgesloten periode: alle weken voorbij, niets doorgeschoven", () => {
+    const s = schuifDoor([10000, 10000, 10000], [9000, 12000, 0], 3);
+    expect(s.every((w) => w.fase === "voorbij" && w.doorgeschoven === 0)).toBe(true);
+    expect(s.map((w) => w.over)).toEqual([1000, -2000, 10000]);
+  });
+  it("periode die nog moet beginnen: alle weken komend", () => {
+    const s = schuifDoor([10000, 10000], [1000, 0], -1);
+    expect(s.map((w) => w.fase)).toEqual(["komend", "komend"]);
+    expect(s.map((w) => w.over)).toEqual([9000, 10000]);
+  });
+  it("de huidige week in de laatste week: 'over' is de weekpot min alle uitgaven", () => {
     const basis = verdeelOverWeken(43870, 5);
     const uit = [9000, 1234, 0, 15000, 50];
-    expect(schuifDoor(basis, uit).at(-1)!.over).toBe(43870 - som(uit));
+    expect(schuifDoor(basis, uit, 4).at(-1)!.over).toBe(43870 - som(uit));
   });
 });
 
@@ -399,6 +412,7 @@ describe("overzicht van een periode", () => {
         uit({ pot: "extra", bedrag: naarCenten(400), omschrijving: "Reis" }),
         uit({ pot: "extra", bedrag: naarCenten(-73), omschrijving: "Terug van vriend" }),
       ],
+      { vandaag: "2026-11-24", afgesloten: true },
     );
     expect(o.vast.weekpot).toBe(43870);
     expect(o.persoonlijk.weekpot).toBe(100000);
@@ -418,6 +432,8 @@ describe("overzicht van een periode", () => {
         uit({ datum: "2026-11-01", bedrag: 5000, pot: "persoonlijk" }),
         uit({ datum: "2026-11-01", bedrag: 99900, pot: "extra" }),
       ],
+      // Week 2 (31 okt t/m 6 nov) is de huidige week.
+      { vandaag: "2026-11-01" },
     );
     const basis = verdeelOverWeken(118012, 5);
     expect(o.weken[0]!.persoonlijk.over).toBe(basis[0]! - 10000);
@@ -428,7 +444,7 @@ describe("overzicht van een periode", () => {
     expect(o.weken[1]!.vast.uitgegeven).toBe(0);
   });
 
-  it("de ingeklapte weekrij: eigen weekbedrag min de uitgaven van die week", () => {
+  it("eigenOver is het eigen weekbedrag min de uitgaven van die week", () => {
     const o = berekenOverzicht(
       periode,
       [],
@@ -436,17 +452,17 @@ describe("overzicht van een periode", () => {
         uit({ datum: "2026-10-25", bedrag: 2200, pot: "vast" }),
         uit({ datum: "2026-11-01", bedrag: 1000, pot: "vast" }),
       ],
+      { vandaag: "2026-11-01" },
     );
     const basis = verdeelOverWeken(o.vast.weekpot, 5);
-    // Week 2 toont niet "beschikbaar" (met het overschot van week 1 erbij)…
     expect(o.weken[1]!.vast.beschikbaar).toBe(basis[1]! + basis[0]! - 2200);
-    // …maar alleen het eigen bedrag van die week.
     expect(o.weken[1]!.vast.eigenOver).toBe(basis[1]! - 1000);
     expect(o.weken[2]!.vast.eigenOver).toBe(basis[2]!);
   });
 
   it("uitgaven uit de pot Extra tellen niet mee in de weekbedragen", () => {
-    const zonder = berekenOverzicht(periode, [], []);
+    const peil = { vandaag: "2026-11-10" };
+    const zonder = berekenOverzicht(periode, [], [], peil);
     const met = berekenOverzicht(
       periode,
       [],
@@ -454,6 +470,7 @@ describe("overzicht van een periode", () => {
         uit({ datum: "2026-10-25", bedrag: 50000, pot: "extra" }),
         uit({ datum: "2026-11-02", bedrag: -7300, pot: "extra" }),
       ],
+      peil,
     );
     expect(met.weken.map((w) => [w.vast, w.persoonlijk])).toEqual(
       zonder.weken.map((w) => [w.vast, w.persoonlijk]),
@@ -461,6 +478,129 @@ describe("overzicht van een periode", () => {
     expect(met.vast.over).toBe(zonder.vast.over);
     expect(met.persoonlijk.over).toBe(zonder.persoonlijk.over);
     expect(met.extra.uitgegeven).toBe(42700);
+  });
+});
+
+describe("doorschuiven alleen vanuit voorbije weken naar de huidige week", () => {
+  // Vier weken van maandag t/m zondag: 2–8, 9–15, 16–22 en 23–29 nov 2026.
+  // Verzonnen, ronde bedragen: € 4.000 salaris, 62 / 25 / 13.
+  // Vaste lasten: weekpot € 2.480 − € 480 = € 2.000, dus € 500 per week.
+  // Persoonlijk: weekpot € 1.000 − € 200 = € 800, dus € 200 per week.
+  const periode: Periode = {
+    id: "p1",
+    startdatum: "2026-11-02",
+    einddatum: "2026-11-29",
+    salaris: 400000,
+    verdeling: STANDAARD_VERDELING,
+    weekStartDag: MAANDAG,
+    startsaldo: 0,
+  };
+  const regel = (id: string, pot: PeriodeRegel["pot"], bedrag: number): PeriodeRegel => ({
+    id,
+    periodeId: "p1",
+    vasteLastId: null,
+    naam: id,
+    pot,
+    bedrag,
+    betaald: false,
+    termijnNr: null,
+    termijnTotaal: null,
+    volgorde: 0,
+  });
+  const regels = [regel("Huur", "vast", 48000), regel("Abonnement", "persoonlijk", 20000)];
+  const uit = (datum: string, bedrag: number, pot: Uitgave["pot"]): Uitgave => ({
+    id: `${datum}-${bedrag}-${pot}`,
+    periodeId: "p1",
+    datum,
+    bedrag,
+    omschrijving: "x",
+    pot,
+    aangemaaktOp: `${datum}T10:00:00Z`,
+  });
+  const uitgaven = [
+    // Week 1 (voorbij): Vaste lasten € 100 overschreden, Persoonlijk € 150 over.
+    uit("2026-11-03", 60000, "vast"),
+    uit("2026-11-05", 5000, "persoonlijk"),
+    // Week 2 (huidig).
+    uit("2026-11-10", 10000, "vast"),
+    uit("2026-11-11", 2000, "persoonlijk"),
+    // Week 3 (komend): al een uitgave ingevoerd.
+    uit("2026-11-18", 7000, "vast"),
+    // Extra telt niet mee in de weken.
+    uit("2026-11-04", 30000, "extra"),
+  ];
+  const vandaag = "2026-11-12";
+
+  it("bepaalt per week of hij voorbij, huidig of komend is", () => {
+    const o = berekenOverzicht(periode, regels, uitgaven, { vandaag });
+    expect(o.weken.map((w) => w.fase)).toEqual(["voorbij", "huidig", "komend", "komend"]);
+  });
+
+  it("een voorbije week toont zijn eigen resultaat, zonder doorgeschoven bedrag", () => {
+    const w = berekenOverzicht(periode, regels, uitgaven, { vandaag }).weken[0]!;
+    expect(w.vast).toMatchObject({ basis: 50000, doorgeschoven: 0, over: -10000, eigenOver: -10000 });
+    expect(w.persoonlijk).toMatchObject({ basis: 20000, doorgeschoven: 0, over: 15000 });
+  });
+
+  it("de huidige week: eigen resultaat plus de voorbije weken", () => {
+    const w = berekenOverzicht(periode, regels, uitgaven, { vandaag }).weken[1]!;
+    // Vaste lasten: € 500 − € 100 = € 400 eigen, − € 100 uit week 1 = € 300.
+    expect(w.vast).toMatchObject({ eigenOver: 40000, doorgeschoven: -10000, over: 30000 });
+    // Persoonlijk: € 200 − € 20 = € 180 eigen, + € 150 uit week 1 = € 330.
+    expect(w.persoonlijk).toMatchObject({ eigenOver: 18000, doorgeschoven: 15000, over: 33000 });
+  });
+
+  it("komende weken tonen alleen hun eigen bedrag, zonder opstapelen", () => {
+    const o = berekenOverzicht(periode, regels, uitgaven, { vandaag });
+    const [, , week3, week4] = o.weken;
+    // Week 3: € 500 − € 70 al ingevoerd; niets van week 1 of 2 erbij.
+    expect(week3!.vast).toMatchObject({ doorgeschoven: 0, beschikbaar: 50000, over: 43000 });
+    expect(week3!.persoonlijk).toMatchObject({ doorgeschoven: 0, beschikbaar: 20000, over: 20000 });
+    // Week 4: precies het weekbedrag.
+    expect(week4!.vast).toMatchObject({ doorgeschoven: 0, over: 50000 });
+    expect(week4!.persoonlijk).toMatchObject({ doorgeschoven: 0, over: 20000 });
+    for (const w of [week3!, week4!]) {
+      expect(w.vast.over).toBe(w.vast.eigenOver);
+      expect(w.persoonlijk.over).toBe(w.persoonlijk.eigenOver);
+    }
+  });
+
+  it("wat er per pot over is, verandert niet", () => {
+    const o = berekenOverzicht(periode, regels, uitgaven, { vandaag });
+    expect(o.vast.over).toBe(200000 - 77000);
+    expect(o.persoonlijk.over).toBe(80000 - 7000);
+  });
+
+  it("een week later schuift ook de vorige huidige week door", () => {
+    const o = berekenOverzicht(periode, regels, uitgaven, { vandaag: "2026-11-16" });
+    expect(o.weken.map((w) => w.fase)).toEqual(["voorbij", "voorbij", "huidig", "komend"]);
+    // Week 2 is nu voorbij en toont alleen zijn eigen resultaat.
+    expect(o.weken[1]!.vast.over).toBe(40000);
+    // Week 3: € 430 eigen − € 100 (week 1) + € 400 (week 2) = € 730.
+    expect(o.weken[2]!.vast).toMatchObject({ doorgeschoven: 30000, over: 73000 });
+    expect(o.weken[3]!.vast.over).toBe(50000);
+  });
+
+  it("een afgesloten periode: alle weken voorbij, niets doorgeschoven", () => {
+    const o = berekenOverzicht(periode, regels, uitgaven, { vandaag, afgesloten: true });
+    expect(o.weken.every((w) => w.fase === "voorbij")).toBe(true);
+    expect(o.weken.map((w) => w.vast.over)).toEqual([-10000, 40000, 43000, 50000]);
+    expect(o.weken.every((w) => w.vast.doorgeschoven === 0)).toBe(true);
+  });
+
+  it("de lopende periode na de einddatum: alle weken voorbij", () => {
+    const o = berekenOverzicht(periode, regels, uitgaven, { vandaag: "2026-12-01" });
+    expect(o.weken.every((w) => w.fase === "voorbij")).toBe(true);
+  });
+
+  it("huidigeWeekIndex: −1 vóór de periode, het aantal blokken erna", () => {
+    const blokken = weekblokken("2026-11-02", "2026-11-29", MAANDAG);
+    expect(huidigeWeekIndex(blokken, "2026-11-01")).toBe(-1);
+    expect(huidigeWeekIndex(blokken, "2026-11-02")).toBe(0);
+    expect(huidigeWeekIndex(blokken, "2026-11-15")).toBe(1);
+    expect(huidigeWeekIndex(blokken, "2026-11-29")).toBe(3);
+    expect(huidigeWeekIndex(blokken, "2026-11-30")).toBe(4);
+    expect(huidigeWeekIndex([], "2026-11-30")).toBe(-1);
   });
 });
 
